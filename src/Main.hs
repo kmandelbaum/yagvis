@@ -11,6 +11,7 @@ import Diagrams.Backend.Gtk
 import Diagrams.Backend.Cairo
 import Data.NumInstances.Tuple
 import Utility
+import GVis.Simple
 
 dir2int :: ScrollDirection -> Int
 dir2int ScrollUp = 1
@@ -19,6 +20,11 @@ dir2int _ = 0
 
 scroll2Double :: ScrollDirection -> Double
 scroll2Double s = (1.1) ** (fromIntegral $ dir2int s)
+
+keyToZoom :: Char -> Double
+keyToZoom '+' = 1.1
+keyToZoom '-' = 1.1 ** (-1)
+keyToZoom x = error $ "Illegal key for zoom: " ++ show x
 
 theDia :: Diagram B R2
 --theDia = circle 110 # fc green
@@ -54,6 +60,9 @@ main = do
    -- show the window
    widgetShowAll window
 
+   initialSize <- widgetGetSize drawingArea
+   let initialCenter = 0.5 *^ both (fromIntegral :: Int -> Double) initialSize
+
    -- describe the ractive network
    let networkDescription :: forall t. Frameworks t => Moment t ()
        networkDescription = do
@@ -67,7 +76,8 @@ main = do
        eKeyPressed <- mevent window keyPressEvent $ eventKeyVal
        eAreaSize <- mevent drawingArea configureEvent $ eventSize
 
-       let eNeedRefresh = (const () <$> eDrag) `union` (const () <$> eScroll)
+       --let eNeedRefresh = (const () <$> eDrag) `union` (const () <$> eScroll)
+       let eNeedRefresh = eTransfm
            bMouseCoords = stepper (0,0) eMotion
            bIsDragDrop = stepper False $ 
              ((pure True) <@ eButtonPressed ) `union` ((pure False) <@ (eButtonReleased `union` eLeave))
@@ -75,21 +85,26 @@ main = do
 
            eTranslation = translation . r2 <$> eDrag
            eScrollTransfm = (scrollTransfm . r2 <$> bMouseCoords) <@> (scroll2Double <$> eScroll)
-           eZoomTransfm = never
-           eTransfm = eTranslation `union` eScrollTransfm `union` eZoomTransfm
+           eZoomTransfm = ( scrollTransfm . r2 <$> bAreaCenter <@> ) $
+                    ( keyToZoom <$> ) $
+                    filterE ( ( liftA2 (||) ) (=='+') (=='-') ) $ 
+                    filterJust $ keyToChar <$> eKeyPressed
 
-           bTransfm = accumB mempty $ (<>) <$> eTransfm 
-           --bDiagram = accumB theDia (transform <$> eTransfm)
+           eTransfm = eTranslation `union` eScrollTransfm `union` eZoomTransfm
+           bTransfm = accumB (translation $ r2 initialCenter ) $ (<>) <$> eTransfm 
+
            bDiagram = (transform <$> bTransfm) <*> pure theDia
+
+           --eKeyArrow = filter 
         
-           --use this only for scrolling (as it's the behavior)
-           eAreaCenter = (0.5 *^) . both ( fromIntegral :: Int -> Double ) <$> eAreaSize
-           
+           bAreaSize = stepper initialSize eAreaSize
+           bAreaCenter = (0.5 *^) . both ( fromIntegral :: Int -> Double ) <$> bAreaSize
 
        reactimate ( draw <$> bDiagram <@> eExpose )
-       reactimate ( pure ( redraw =<< widgetGetDrawWindow drawingArea ) <@ eNeedRefresh)
-       --reactimate ( ( \x-> print $ fromMaybe (keyName x) (show <$> keyToChar x) ) <$> eKeyPressed )
+       reactimate ( ( redraw =<< widgetGetDrawWindow drawingArea ) <$ eNeedRefresh)
+       reactimate ( ( \x-> print $ fromMaybe (keyName x) (show <$> keyToChar x) ) <$> eKeyPressed )
        --reactimate ( print <$> bAreaCenter <@ eAreaSize )
+       --reactimate (print <$> ez )
        sink window [ windowTitle :== (show <$> bMouseCoords) ]
        return ()
 

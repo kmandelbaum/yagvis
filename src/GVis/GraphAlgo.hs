@@ -1,3 +1,4 @@
+module GVis.GraphAlgo where
 import Data.Foldable ( maximum, minimum )
 import Data.Text.Lazy.IO ( readFile )
 import Prelude hiding ( readFile, maximum, minimum )
@@ -66,7 +67,7 @@ edgeMap f = gmap transfmContext
     ledgeFrom (from, _, l) = (l, from)
     ledgeTo ( _, to, l) = (l, to)
 
-earlyTimes :: DynGraph gr => gr a b -> Array Node Int
+earlyTimes :: Graph gr => gr a b -> Array Node Int
 earlyTimes g = arr
   where
     arr = array ( nodeRange g ) entries
@@ -84,7 +85,7 @@ trueDff' g = dff spawnNodes g
         forestId = array (nodeRange g) $ concat labeledNodes
         labeledNodes = zipWith zip (map flatten forest) $ map repeat [1..]
 
-toLevels :: DynGraph gr => gr a b -> Array Int [Node]
+toLevels :: Graph gr => gr a b -> Array Int [Node]
 toLevels g = accumArray (flip (:)) [] (min, max) (map swap $ assocs et)
   where et = earlyTimes g
         (min, max) =  (minimum et, maximum et)
@@ -93,5 +94,3 @@ unright (Right x) = x
 
 graph =  revertBackEdges <$> markBackEdges <$> unright <$> loadGraph
 
-main :: IO ()
-main = print =<< graph
