@@ -13,17 +13,8 @@ hvcat' ::  ( Monoid a,
              HasOrigin a,
              Juxtaposable a,
              Semigroup a,
+             Alignable a,
              V a ~ R2 ) =>
     CatOpts R2 -> CatOpts R2 -> [[a]] -> a
-hvcat' hCatOpts vCatOpts xs = vcat' vCatOpts $ map (hcat' hCatOpts) xs
+hvcat' hCatOpts vCatOpts xs = vcat' vCatOpts $ map ( \x -> hcat' hCatOpts x # center ) xs
 
--- class for type representable as 2-D diagrams
--- backend should render text and paths
-class Visual v where
-    toDiagram :: forall c . ( Renderable (Path R2) c,
-                              Renderable DiaText.Text c ) => 
-                v -> Diagram c R2 
-
-graphNodeToDiagram :: (Graph gr, Visual a, Renderable (Path R2) c, Renderable Text c ) => 
-    Node -> gr a b -> Diagram c R2
-graphNodeToDiagram n g = toDiagram ( fromJust $ lab g n ) # named n

@@ -24,7 +24,7 @@ parser = parse
 
 loadGraph :: IO ( Either String MyGraph )
 loadGraph = do
-    file <- readFile "1.dot"
+    file <- readFile "data/1.dot"
     return $ (dotToGraph <$>) $ fst $ runParser parser file
 
 revertBackEdges :: MyGraph -> MyGraph
@@ -92,5 +92,5 @@ toLevels g = accumArray (flip (:)) [] (min, max) (map swap $ assocs et)
 
 unright (Right x) = x
 
-graph =  revertBackEdges <$> markBackEdges <$> unright <$> loadGraph
+prepareGraph = revertBackEdges <$> unright <$> loadGraph
 

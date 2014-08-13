@@ -12,6 +12,7 @@ import Diagrams.Backend.Cairo
 import Data.NumInstances.Tuple
 import Utility
 import GVis.Simple
+import GVis.GraphAlgo
 
 dir2int :: ScrollDirection -> Int
 dir2int ScrollUp = 1
@@ -19,7 +20,7 @@ dir2int ScrollDown = -1
 dir2int _ = 0
 
 scroll2Double :: ScrollDirection -> Double
-scroll2Double s = (1.1) ** (fromIntegral $ dir2int s)
+scroll2Double s = 1.1 ** fromIntegral ( dir2int s )
 
 keyToZoom :: Char -> Double
 keyToZoom '+' = 1.1
@@ -27,12 +28,13 @@ keyToZoom '-' = 1.1 ** (-1)
 keyToZoom x = error $ "Illegal key for zoom: " ++ show x
 
 theDia :: Diagram B R2
+theDia = undefined
 --theDia = circle 110 # fc green
-theDia = connectOutside' (with & headLength .~ (Local 20) & gap .~(Local 10)) "c1" "c2" $ rotateBy (1/3) $ showOrigin $ center $ named "c1" (circle 20 <> text "1") ||| strutX 100 ||| named "c2" (circle 20)
+--theDia = connectOutside' (with & headLength .~ (Local 20) & gap .~(Local 10)) "c1" "c2" $ rotateBy (1/3) $ showOrigin $ center $ named "c1" (circle 20 <> text "1") ||| strutX 100 ||| named "c2" (circle 20)
+--theDia g =  
 
 draw :: DrawableClass dc => Diagram B R2 -> dc -> IO( )
-draw d dc = do
-    renderToGtk dc $ d
+draw d dc = renderToGtk dc d
 
 redraw :: (DrawWindowClass w) => w -> IO()
 redraw w = do
@@ -62,6 +64,8 @@ main = do
 
    initialSize <- widgetGetSize drawingArea
    let initialCenter = 0.5 *^ both (fromIntegral :: Int -> Double) initialSize
+   
+   graph <- prepareGraph
 
    -- describe the ractive network
    let networkDescription :: forall t. Frameworks t => Moment t ()
@@ -73,36 +77,37 @@ main = do
        eLeave <- mevent drawingArea leaveNotifyEvent $ return ()
        eButtonPressed <- mevent drawingArea buttonPressEvent $ return ()
        eButtonReleased <- mevent drawingArea buttonReleaseEvent $ return ()
-       eKeyPressed <- mevent window keyPressEvent $ eventKeyVal
-       eAreaSize <- mevent drawingArea configureEvent $ eventSize
+       eKeyPressed <- mevent window keyPressEvent eventKeyVal
+       eAreaSize <- mevent drawingArea configureEvent eventSize
 
        --let eNeedRefresh = (const () <$> eDrag) `union` (const () <$> eScroll)
        let eNeedRefresh = eTransfm
            bMouseCoords = stepper (0,0) eMotion
            bIsDragDrop = stepper False $ 
-             ((pure True) <@ eButtonPressed ) `union` ((pure False) <@ (eButtonReleased `union` eLeave))
+             ( pure True <@ eButtonPressed ) `union` ( pure False <@ (eButtonReleased `union` eLeave))
            eDrag = filterApply (const <$> bIsDragDrop) $ (flip (-) <$> bMouseCoords) <@> eMotion
 
            eTranslation = translation . r2 <$> eDrag
            eScrollTransfm = (scrollTransfm . r2 <$> bMouseCoords) <@> (scroll2Double <$> eScroll)
            eZoomTransfm = ( scrollTransfm . r2 <$> bAreaCenter <@> ) $
                     ( keyToZoom <$> ) $
-                    filterE ( ( liftA2 (||) ) (=='+') (=='-') ) $ 
+                    filterE ( liftA2 (||) (=='+') (=='-') ) $ 
                     filterJust $ keyToChar <$> eKeyPressed
 
            eTransfm = eTranslation `union` eScrollTransfm `union` eZoomTransfm
-           bTransfm = accumB (translation $ r2 initialCenter ) $ (<>) <$> eTransfm 
+           bTransfm = accumB ( scalingY (-1) <> translation ( r2 initialCenter) ) $ (<>) <$> eTransfm
 
-           bDiagram = (transform <$> bTransfm) <*> pure theDia
+           --bDiagram = (transform <$> bTransfm) <*> pure theDia
+           bDiagram = (transform <$> bTransfm) <*> pure ( edgeSimple $ vertToRect graph )
 
            --eKeyArrow = filter 
         
            bAreaSize = stepper initialSize eAreaSize
-           bAreaCenter = (0.5 *^) . both ( fromIntegral :: Int -> Double ) <$> bAreaSize
+           bAreaCenter = ( 0.5 *^ ) . both ( fromIntegral :: Int -> Double ) <$> bAreaSize
 
        reactimate ( draw <$> bDiagram <@> eExpose )
        reactimate ( ( redraw =<< widgetGetDrawWindow drawingArea ) <$ eNeedRefresh)
-       reactimate ( ( \x-> print $ fromMaybe (keyName x) (show <$> keyToChar x) ) <$> eKeyPressed )
+       reactimate ( ( \x-> print $ fromMaybe (keyName x) ( show <$> keyToChar x) ) <$> eKeyPressed )
        --reactimate ( print <$> bAreaCenter <@ eAreaSize )
        --reactimate (print <$> ez )
        sink window [ windowTitle :== (show <$> bMouseCoords) ]
@@ -111,4 +116,3 @@ main = do
    network <- compile networkDescription    
    actuate network
    mainGUI
-
