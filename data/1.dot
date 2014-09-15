@@ -1,9 +1,6 @@
 digraph graph1 {
     1->2
-    2->3[dir=back]
-    3->1
-    4->1
-    6->5[dir=back]
-    5->6
-    1->6[dir=back]
+    2->3
+    3->4
+    3->5
 }
