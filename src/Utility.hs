@@ -15,6 +15,3 @@ intervalContains (x',y') (x'',y'') = x' <= x'' && y' >= y''
 
 (-<-) :: (a -> b, a -> c) -> a -> (b, c)
 (-<-) (f, g) a = (f a, g a)
-
-both :: (Arrow f) => f a b -> f (a,a) (b,b)
-both x = x *** x

@@ -55,7 +55,7 @@ markBackEdges g = edgeMap (ifF isBack markBack id) g
     f x [] = etimes ! x
     f _ ts = maximum $ map ((ltimes !) . rootLabel) ts
 
-    isBack (from, to, _) = (intervalContains `on` timeInterval ) to from
+    isBack (from, to, _) = ( intervalContains `on` timeInterval ) to from
     timeInterval x = (etimes ! x, ltimes ! x)
 
     markBack (from, to, attrs) = (from, to, Dir Back:attrs)

@@ -25,17 +25,17 @@ visualizeWithLevels :: ( Graph gr,
                          Renderable (Path R2) c ) => 
     gr (Diagram c R2) b -> Diagram c R2
 visualizeWithLevels g = hvcat' ( with & sep .~ defaultSpacing ) ( with & sep .~ defaultSpacing ) levels
-    where levels = map ( map ( \x -> getNode x # named x ) . snd ) $ assocs $ toLevels g
-          getNode = fromJust . lab g
+    where levels = map ( map ( \x -> fromJust (lab g x) # named x ) . snd ) $ assocs $ toLevels g
 
 vertToEll :: (DynGraph gr, Renderable DiaText.Text c, Renderable (Path R2) c) => gr a b -> gr (Diagram c R2) b
-vertToEll = gmap ( \(pre, n, a, suc) -> (pre, n, ellipseWithName (show n), suc) ) 
+vertToEll = gmap ( \(p, n, _, s) -> (p, n, ellipseWithName (show n), s) ) 
 
 vertToRect :: (DynGraph gr, Renderable DiaText.Text c, Renderable (Path R2) c) => gr a b -> gr (Diagram c R2) b
-vertToRect = gmap ( \(pre, n, a, suc) -> (pre, n, rectangleWithName (show n), suc) ) 
+vertToRect = gmap ( \(p, n, _, s) -> (p, n, rectangleWithName (show n), s) ) 
 
 edgeSimple :: (DynGraph gr, Renderable DiaText.Text c, Renderable (Path R2) c) =>
     gr (Diagram c R2) b -> Diagram c R2
 
-edgeSimple g = connectEdges g $ visualizeWithLevels g
-    where connectEdges g = foldr ( (.) . uncurry ( connectOutside' defaultArrowOpt ) ) id $ edges g
+edgeSimple g = connectEdges $ visualizeWithLevels g
+    --where connectEdges g' = foldr ( (.) . uncurry ( connectOutside' defaultArrowOpt ) ) id $ edges g'
+    where connectEdges g' = foldr ( uncurry ( connectOutside' defaultArrowOpt ) ) g' $ edges g

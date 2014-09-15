@@ -13,6 +13,7 @@ import Data.NumInstances.Tuple
 import Utility
 import GVis.Simple
 import GVis.GraphAlgo
+import Control.Lens( over, both )
 
 dir2int :: ScrollDirection -> Int
 dir2int ScrollUp = 1
@@ -63,7 +64,7 @@ main = do
    widgetShowAll window
 
    initialSize <- widgetGetSize drawingArea
-   let initialCenter = 0.5 *^ both (fromIntegral :: Int -> Double) initialSize
+   let initialCenter = (over both ( (0.5*) . fromIntegral) ) initialSize
    
    graph <- prepareGraph
 
@@ -103,7 +104,7 @@ main = do
            --eKeyArrow = filter 
         
            bAreaSize = stepper initialSize eAreaSize
-           bAreaCenter = ( 0.5 *^ ) . both ( fromIntegral :: Int -> Double ) <$> bAreaSize
+           bAreaCenter = ( over both ( (0.5*) .fromIntegral ) ) <$> bAreaSize
 
        reactimate ( draw <$> bDiagram <@> eExpose )
        reactimate ( ( redraw =<< widgetGetDrawWindow drawingArea ) <$ eNeedRefresh)
