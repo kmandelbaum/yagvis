@@ -1,6 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables,GADTs,FlexibleContexts #-} -- allows "forall t. Moment t" module Main where
 import Graphics.UI.Gtk
-import Control.Monad.State
 import Data.Maybe
 import Reactive.Banana hiding (apply)
 import Reactive.Banana.Frameworks
