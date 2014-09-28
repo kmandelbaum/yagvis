@@ -15,8 +15,6 @@ rectangleWithName n = rect 200 100 <> ( text n # fontSize (Local 40) )
 defaultSpacing :: Double
 defaultSpacing = 100.0
 
-defaultArrowOpt = with & gaps .~ small
-
 -- visualize with levels
 -- the graph should be acyclic
 --
@@ -37,5 +35,4 @@ edgeSimple :: (DynGraph gr, Renderable DiaText.Text c, Renderable (Path R2) c) =
     gr (Diagram c R2) b -> Diagram c R2
 
 edgeSimple g = connectEdges $ visualizeWithLevels g
-    --where connectEdges g' = foldr ( (.) . uncurry ( connectOutside' defaultArrowOpt ) ) id $ edges g'
     where connectEdges g' = foldr ( uncurry ( connectOutside' defaultArrowOpt ) ) g' $ edges g

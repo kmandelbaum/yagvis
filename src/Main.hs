@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables,GADTs,FlexibleContexts #-} -- allows "forall t. Moment t" module Main where
+{-# LANGUAGE ScopedTypeVariables,GADTs,FlexibleContexts,TypeSynonymInstances #-} -- allows "forall t. Moment t" module Main where
 import Graphics.UI.Gtk
 import Data.Maybe
 import Reactive.Banana hiding (apply)
@@ -12,7 +12,10 @@ import Data.NumInstances.Tuple
 import Utility
 import GVis.Simple
 import GVis.GraphAlgo
+import GVis.GVis( graphToDia, convertGraph, TwoDRender)
 import Control.Lens( over, both )
+
+instance TwoDRender B where
 
 dir2int :: ScrollDirection -> Int
 dir2int ScrollUp = 1
@@ -31,7 +34,7 @@ theDia :: Diagram B R2
 theDia = undefined
 --theDia = circle 110 # fc green
 --theDia = connectOutside' (with & headLength .~ (Local 20) & gap .~(Local 10)) "c1" "c2" $ rotateBy (1/3) $ showOrigin $ center $ named "c1" (circle 20 <> text "1") ||| strutX 100 ||| named "c2" (circle 20)
---theDia g =  
+--theDia g =
 
 draw :: DrawableClass dc => Diagram B R2 -> dc -> IO( )
 draw d dc = renderToGtk dc d
@@ -64,8 +67,13 @@ main = do
 
    initialSize <- widgetGetSize drawingArea
    let initialCenter = (over both ( (0.5*) . fromIntegral) ) initialSize
-   
-   graph <- prepareGraph
+
+   graph' <- prepareGraph
+
+   let graph = convertGraph graph'
+
+   --print graph
+
 
    -- describe the ractive network
    let networkDescription :: forall t. Frameworks t => Moment t ()
@@ -80,10 +88,9 @@ main = do
        eKeyPressed <- mevent window keyPressEvent eventKeyVal
        eAreaSize <- mevent drawingArea configureEvent eventSize
 
-       --let eNeedRefresh = (const () <$> eDrag) `union` (const () <$> eScroll)
        let eNeedRefresh = eTransfm
            bMouseCoords = stepper (0,0) eMotion
-           bIsDragDrop = stepper False $ 
+           bIsDragDrop = stepper False $
              ( pure True <@ eButtonPressed ) `union` ( pure False <@ (eButtonReleased `union` eLeave))
            eDrag = filterApply (const <$> bIsDragDrop) $ (flip (-) <$> bMouseCoords) <@> eMotion
 
@@ -91,17 +98,18 @@ main = do
            eScrollTransfm = (scrollTransfm . r2 <$> bMouseCoords) <@> (scroll2Double <$> eScroll)
            eZoomTransfm = ( scrollTransfm . r2 <$> bAreaCenter <@> ) $
                     ( keyToZoom <$> ) $
-                    filterE ( liftA2 (||) (=='+') (=='-') ) $ 
+                    filterE ( liftA2 (||) (=='+') (=='-') ) $
                     filterJust $ keyToChar <$> eKeyPressed
 
            eTransfm = eTranslation `union` eScrollTransfm `union` eZoomTransfm
            bTransfm = accumB ( scalingY (-1) <> translation ( r2 initialCenter) ) $ (<>) <$> eTransfm
 
            --bDiagram = (transform <$> bTransfm) <*> pure theDia
-           bDiagram = (transform <$> bTransfm) <*> pure ( edgeSimple $ vertToRect graph )
+           --bDiagram = (transform <$> bTransfm) <*> pure ( edgeSimple $ vertToRect graph )
+           bDiagram = (transform <$> bTransfm) <*> pure ( graphToDia graph )
 
-           --eKeyArrow = filter 
-        
+           --eKeyArrow = filter
+
            bAreaSize = stepper initialSize eAreaSize
            bAreaCenter = ( over both ( (0.5*) .fromIntegral ) ) <$> bAreaSize
 
@@ -113,6 +121,6 @@ main = do
        sink window [ windowTitle :== (show <$> bMouseCoords) ]
        return ()
 
-   network <- compile networkDescription    
+   network <- compile networkDescription
    actuate network
    mainGUI
