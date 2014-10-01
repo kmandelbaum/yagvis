@@ -10,12 +10,16 @@ import Data.GraphViz (dotToGraph, Attributes)
 import Data.Graph.Inductive.Tree
 import Data.GraphViz.Attributes.Complete( DirType( Back ), Attribute(Dir) )
 import Data.Graph.Inductive.Query.DFS
-import Data.Array
 --import Data.List hiding (maximum, minimum)
 import Data.Tree
 import Utility
 import Data.Function(on)
 import Data.Tuple(swap)
+import Data.Function.Memoize
+import Data.IntMap( fromList, (!), assocs, IntMap, fromListWith )
+import Data.Monoid.Reducer( unit )
+import Data.Monoid ( mappend )
+import Control.Arrow( second )
 
 type MyGraph = Gr Attributes Attributes
 
@@ -46,8 +50,8 @@ markBackEdges g = edgeMap (ifF isBack markBack id) g
     forest = trueDff' g
     allnodes = nodeRange g
 
-    etimes = array allnodes $ concatMap flatten forest `zip` [1..]
-    ltimes = array allnodes $ gatherForestLtimes forest
+    etimes = fromList $ concatMap flatten forest `zip` [1..]
+    ltimes = fromList $ gatherForestLtimes forest
 
     gatherForestLtimes [] = []
     gatherForestLtimes (Node x ts:ns) = (x, f x ts):gatherForestLtimes (ns ++ ts)
@@ -67,10 +71,10 @@ edgeMap f = gmap transfmContext
     ledgeFrom (from, _, l) = (l, from)
     ledgeTo ( _, to, l) = (l, to)
 
-earlyTimes :: Graph gr => gr a b -> Array Node Int
+earlyTimes :: Graph gr => gr a b -> IntMap Int
 earlyTimes g = arr
   where
-    arr = array ( nodeRange g ) entries
+    arr = fromList entries
     entries = map ( arrayEntry . context g ) $ nodes g
 
     arrayEntry ([], n, _, _) = (n, 0)
@@ -82,11 +86,11 @@ trueDff' g = dff spawnNodes g
         isInitial = all noEdgeFromOtherTree . flatten
         forest = dff' g
         noEdgeFromOtherTree n = all ( == forestId ! n) $ map (forestId !) $ pre g n 
-        forestId = array (nodeRange g) $ concat labeledNodes
+        forestId = fromList $ concat labeledNodes
         labeledNodes = zipWith zip (map flatten forest) $ map repeat [1..]
 
-toLevels :: Graph gr => gr a b -> Array Int [Node]
-toLevels g = accumArray (flip (:)) [] (min, max) (map swap $ assocs et)
+toLevels :: Graph gr => gr a b -> IntMap [Node]
+toLevels g = fromListWith mappend (map (second unit . swap) $ assocs et)
   where et = earlyTimes g
         (min, max) =  (minimum et, maximum et)
 

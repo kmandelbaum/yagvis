@@ -6,8 +6,8 @@ import Diagrams.Prelude
 import Data.Graph.Inductive hiding (Path, (&))
 import GVis.GraphAlgo
 import Diagrams.TwoD.Text as DiaText
-import Data.Array
 import Data.Maybe
+import Data.IntMap( assocs )
 
 ellipseWithName n = ellipseXY 200 100 <> ( text n # fontSize (Local 40) )
 rectangleWithName n = rect 200 100 <> ( text n # fontSize (Local 40) )

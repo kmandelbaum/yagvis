@@ -6,7 +6,6 @@ import Data.Graph.Inductive hiding ( (&), Path )
 import Diagrams.Prelude
 import Control.Lens( _1, traverse, over )
 import GVis.GraphAlgo
-import Data.Array ( (!) )
 import Data.Maybe
 import Diagrams.TwoD.Text as DiaText
 import Data.Default
@@ -15,6 +14,7 @@ import Data.IntMap( fromListWith, IntMap, elems )
 import Data.Tuple( swap )
 import Data.Monoid.Reducer( unit )
 import Data.Monoid ( mappend )
+import Data.IntMap( (!), assocs )
 
 import Debug.Trace as DT
 
