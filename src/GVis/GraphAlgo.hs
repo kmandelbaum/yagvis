@@ -2,36 +2,36 @@ module GVis.GraphAlgo where
 import Data.Foldable ( maximum, minimum )
 import Data.Text.Lazy.IO ( readFile )
 import Prelude hiding ( readFile, maximum, minimum )
-import Data.GraphViz.Types.Canonical
-import Data.GraphViz.Parsing
-import Data.Graph.Inductive.Graph
-import Data.Graph.Inductive.Basic
+import Data.GraphViz.Types.Canonical( DotGraph )
+import Data.GraphViz.Parsing( parse, runParser, Parse )
 import Data.GraphViz (dotToGraph, Attributes)
-import Data.Graph.Inductive.Tree
 import Data.GraphViz.Attributes.Complete( DirType( Back ), Attribute(Dir) )
-import Data.Graph.Inductive.Query.DFS
---import Data.List hiding (maximum, minimum)
-import Data.Tree
-import Utility
+
+import Data.Graph.Inductive.Query.DFS ( dff, dff' )
+import Data.Graph.Inductive.PatriciaTree( Gr )
+import Data.Graph.Inductive( pre, pre', Graph, node', nodes, context, out', inn', lab', gmap, LEdge,
+                             nodeRange, elfilter, DynGraph, Context, Node)
 import Data.Function(on)
 import Data.Tuple(swap)
-import Data.Function.Memoize
+import Data.Function.Memoize( memoFix )
+import Data.Tree( Tree( Node), flatten, rootLabel )
 import Data.IntMap( fromList, (!), assocs, IntMap, fromListWith )
 import Data.Monoid.Reducer( unit )
 import Data.Monoid ( mappend )
 import Control.Arrow( second )
-
-type MyGraph = Gr Attributes Attributes
+import Control.Comonad ( extend )
+import Data.Functor ( (<$>) )
+import Utility( ifF, intervalContains )
 
 parser :: Parse ( DotGraph Node )
 parser = parse 
 
-loadGraph :: IO ( Either String MyGraph )
+loadGraph :: IO ( Either String (Gr Attributes Attributes) )
 loadGraph = do
     file <- readFile "data/1.dot"
     return $ (dotToGraph <$>) $ fst $ runParser parser file
 
-revertBackEdges :: MyGraph -> MyGraph
+revertBackEdges :: (DynGraph gr) => gr a Attributes -> gr a Attributes
 revertBackEdges = gmap revertBackEdge
 
 revertBackEdge :: Context a [Attribute] -> Context a [Attribute] 
@@ -41,23 +41,20 @@ revertBackEdge (i, n, d, o) = (i', n, d, o')
     i' = filter isBack o ++ filter (not . isBack) i
     o' = filter isBack i ++ filter (not . isBack) o
 
-removeBackEdges :: MyGraph -> MyGraph
+removeBackEdges :: DynGraph gr => gr a Attributes -> gr a Attributes
 removeBackEdges = elfilter ( notElem (Dir Back) )
 
-markBackEdges :: MyGraph -> MyGraph
+markBackEdges :: DynGraph gr => gr a Attributes -> gr a Attributes
 markBackEdges g = edgeMap (ifF isBack markBack id) g
   where
     forest = trueDff' g
     allnodes = nodeRange g
 
     etimes = fromList $ concatMap flatten forest `zip` [1..]
-    ltimes = fromList $ gatherForestLtimes forest
+    ltimes = fromList $ concatMap flatten $ map ( extend f ) forest
 
-    gatherForestLtimes [] = []
-    gatherForestLtimes (Node x ts:ns) = (x, f x ts):gatherForestLtimes (ns ++ ts)
-
-    f x [] = etimes ! x
-    f _ ts = maximum $ map ((ltimes !) . rootLabel) ts
+    f (Node x []) = (x, etimes ! x)
+    f (Node x ts) = (x, maximum $ map ( ( ltimes ! ) . rootLabel ) ts )
 
     isBack (from, to, _) = ( intervalContains `on` timeInterval ) to from
     timeInterval x = (etimes ! x, ltimes ! x)
@@ -90,11 +87,8 @@ trueDff' g = dff spawnNodes g
         labeledNodes = zipWith zip (map flatten forest) $ map repeat [1..]
 
 toLevels :: Graph gr => gr a b -> IntMap [Node]
-toLevels g = fromListWith mappend (map (second unit . swap) $ assocs et)
-  where et = earlyTimes g
-        (min, max) =  (minimum et, maximum et)
+toLevels g = fromListWith mappend (map (second unit . swap) $ assocs $ (earlyTimes g))
 
 unright (Right x) = x
 
 prepareGraph = revertBackEdges <$> unright <$> loadGraph
-
