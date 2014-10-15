@@ -92,3 +92,4 @@ toLevels g = fromListWith mappend (map (second unit . swap) $ assocs $ (earlyTim
 unright (Right x) = x
 
 prepareGraph = revertBackEdges <$> unright <$> loadGraph
+

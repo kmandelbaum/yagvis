@@ -107,7 +107,6 @@ main = do
            --bDiagram = (transform <$> bTransfm) <*> pure theDia
            --bDiagram = (transform <$> bTransfm) <*> pure ( edgeSimple $ vertToRect graph )
            bDiagram = (transform <$> bTransfm) <*> pure ( graphToDia graph )
-
            --eKeyArrow = filter
 
            bAreaSize = stepper initialSize eAreaSize
@@ -115,7 +114,7 @@ main = do
 
        reactimate ( draw <$> bDiagram <@> eExpose )
        reactimate ( ( redraw =<< widgetGetDrawWindow drawingArea ) <$ eNeedRefresh)
-       reactimate ( ( \x-> print $ fromMaybe (keyName x) ( show <$> keyToChar x) ) <$> eKeyPressed )
+       reactimate ( ( \x-> print $ fromMaybe (show $ keyName x) ( show <$> keyToChar x) ) <$> eKeyPressed )
        --reactimate ( print <$> bAreaCenter <@ eAreaSize )
        --reactimate (print <$> ez )
        sink window [ windowTitle :== (show <$> bMouseCoords) ]
