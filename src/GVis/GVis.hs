@@ -12,13 +12,13 @@ import GVis.GraphAlgo( earlyTimes )
 import Data.Maybe( fromMaybe, fromJust, isJust )
 import Data.Default( def )
 import Control.Arrow( (&&&), (***) )
-import Data.IntMap( fromListWith, IntMap, elems )
+import Data.IntMap( fromListWith, (!), IntMap )
 import Data.Tuple( swap )
-import Data.Monoid.Reducer( unit )
 import Data.Monoid ( mappend )
-import Data.IntMap( (!), assocs )
 import Data.List( partition )
-import Data.Foldable( foldMap )
+import Data.Foldable( foldMap, toList )
+import Data.Sequence( Seq )
+import Data.Semigroup.Reducer( unit )
 
 import Debug.Trace as DT
 
@@ -91,8 +91,9 @@ convertGraph g = ( bindCross . bindRegular . removeCrossEdges ) g
 
 graphToDia :: (DynGraph gr, TwoDRender c) => GVRepGraph gr a b -> TwoDDiagram c
 graphToDia g = connectEdges g $ hvcat' hcatopts vcatopts dLevels
-  where dLevels = ( map . map ) nodeToDia $ elems nLevels
+  where dLevels = ( map . map ) nodeToDia $ map toList $ toList nLevels
 
+        nLevels :: IntMap (Seq Node)
         nLevels = fromListWith mappend acsList
           where acsList = map ( (gvLevel *** unit) . swap ) $ labNodes g
 

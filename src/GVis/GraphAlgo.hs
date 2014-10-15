@@ -21,7 +21,9 @@ import Data.Monoid ( mappend )
 import Control.Arrow( second )
 import Control.Comonad ( extend )
 import Data.Functor ( (<$>) )
-import Utility( ifF, intervalContains )
+import Utility( ifF )
+import Numeric.Interval( (...) )
+import qualified Numeric.Interval as Inter
 
 parser :: Parse ( DotGraph Node )
 parser = parse 
@@ -56,8 +58,8 @@ markBackEdges g = edgeMap (ifF isBack markBack id) g
     f (Node x []) = (x, etimes ! x)
     f (Node x ts) = (x, maximum $ map ( ( ltimes ! ) . rootLabel ) ts )
 
-    isBack (from, to, _) = ( intervalContains `on` timeInterval ) to from
-    timeInterval x = (etimes ! x, ltimes ! x)
+    isBack (from, to, _) = ( Inter.contains `on` timeInterval ) to from
+    timeInterval x = etimes ! x ... ltimes ! x
 
     markBack (from, to, attrs) = (from, to, Dir Back:attrs)
     
@@ -92,4 +94,3 @@ toLevels g = fromListWith mappend (map (second unit . swap) $ assocs $ (earlyTim
 unright (Right x) = x
 
 prepareGraph = revertBackEdges <$> unright <$> loadGraph
-
