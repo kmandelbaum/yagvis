@@ -1,17 +1,18 @@
 {-# LANGUAGE TypeFamilies,TypeSynonymInstances,RankNTypes,FlexibleContexts,ScopedTypeVariables #-}
 module GVis.GVis where
 
-import Data.Graph.Inductive hiding ( (&), Path )
---import Data.Graph.Inductive.Graph
+
 import Diagrams.Prelude hiding ( view )
 import Diagrams.TwoD.Text as DiaText
 import Diagrams.Core.Style
 
-import Control.Lens( _1, _2, _3, view, traverse, over )
 import GVis.GraphAlgo( earlyTimes )
+import GVis.MinIntersect ( findGoodLeveling )
+
 import Data.Maybe( fromMaybe, fromJust, isJust )
 import Data.Default( def )
-import Control.Arrow( (&&&), (***) )
+
+import Data.Graph.Inductive hiding ( (&), Path )
 import Data.IntMap( fromListWith, (!), IntMap )
 import Data.Tuple( swap )
 import Data.Monoid ( mappend )
@@ -19,6 +20,9 @@ import Data.List( partition )
 import Data.Foldable( foldMap, toList )
 import Data.Sequence( Seq )
 import Data.Semigroup.Reducer( unit )
+
+import Control.Arrow( (&&&), (***) )
+import Control.Lens( _1, _2, _3, view, traverse, over )
 
 import Debug.Trace as DT
 
@@ -93,9 +97,11 @@ graphToDia :: (DynGraph gr, TwoDRender c) => GVRepGraph gr a b -> TwoDDiagram c
 graphToDia g = connectEdges g $ hvcat' hcatopts vcatopts dLevels
   where dLevels = ( map . map ) nodeToDia $ map toList $ toList nLevels
 
-        nLevels :: IntMap (Seq Node)
-        nLevels = fromListWith mappend acsList
-          where acsList = map ( (gvLevel *** unit) . swap ) $ labNodes g
+        --nLevels :: IntMap (Seq Node)
+        --nLevels = fromListWith mappend acsList
+          --where acsList = map ( (gvLevel *** unit) . swap ) $ labNodes g
+        nLevels :: [[Node]]
+        nLevels = findGoodLeveling $ elfilter (null . gvPartNodes) g
 
         nodeToDia n = named n $ maybe invisNode (const visNode) d
           where GVRepNode{ gvNodeData = d } = fromJust $ lab g n
