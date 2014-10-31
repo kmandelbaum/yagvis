@@ -7,7 +7,7 @@ import Diagrams.TwoD.Text as DiaText
 import Diagrams.Core.Style
 
 import GVis.GraphAlgo( earlyTimes )
-import GVis.MinIntersect ( findGoodLeveling )
+import GVis.MinIntersect ( findChainLeveling, findGoodLeveling )
 
 import Data.Maybe( fromMaybe, fromJust, isJust )
 import Data.Default( def )
@@ -101,7 +101,7 @@ graphToDia g = connectEdges g $ hvcat' hcatopts vcatopts dLevels
         --nLevels = fromListWith mappend acsList
           --where acsList = map ( (gvLevel *** unit) . swap ) $ labNodes g
         nLevels :: [[Node]]
-        nLevels = findGoodLeveling $ elfilter (null . gvPartNodes) g
+        nLevels = findChainLeveling $ elfilter (null . gvPartNodes) g
 
         nodeToDia n = named n $ maybe invisNode (const visNode) d
           where GVRepNode{ gvNodeData = d } = fromJust $ lab g n
@@ -134,7 +134,7 @@ splineArrows es d = d <> foldMap edgeSubDia es
         (toEnd, toEnd') = arrowEnd to $ last partNodes 
         locs = fromEnd:map (location . getSubDia) partNodes ++ [toEnd']
         getSubDia n = fromJustMsg (lookupName n d) $
-            "Error: name " ++ show n ++ "isn't in the diagram"
+            "Error: name " ++ show n ++ " isn't in the diagram"
         arrowEnd n1 n2 = let s1 = getSubDia n1
                              l1 = location s1
                              l2 = location $ getSubDia n2

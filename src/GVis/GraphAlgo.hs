@@ -9,12 +9,12 @@ import Data.GraphViz.Attributes.Complete( DirType( Back ), Attribute(Dir) )
 
 import Data.Graph.Inductive.Query.DFS ( dff, dff' )
 import Data.Graph.Inductive.PatriciaTree( Gr )
-import Data.Graph.Inductive( pre, pre', Graph, node', nodes, context, out', inn', lab', gmap, LEdge,
+import Data.Graph.Inductive( pre, pre', suc', Graph, node', nodes, context, out', inn', lab', gmap, LEdge,
                              nodeRange, elfilter, DynGraph, Context, Node)
 import Data.Function(on)
 import Data.Tuple(swap)
 import Data.Function.Memoize( memoFix )
-import Data.Tree( Tree( Node), flatten, rootLabel )
+import Data.Tree( Tree( Node), flatten, rootLabel, Forest )
 import Data.IntMap( fromList, (!), assocs, IntMap, fromListWith )
 import Data.Monoid.Reducer( unit )
 import Data.Monoid ( mappend )
@@ -80,6 +80,17 @@ earlyTimes g = arr
     arrayEntry c = (n, (1+) $ maximum $ map (arr !) $ filter (n /=) $ pre' c)
       where n = node' c
 
+lateTimes :: Graph gr => gr a b -> IntMap Int -> IntMap Int
+lateTimes g et = arr
+  where
+    arr = fromList entries
+    entries = map ( arrayEntry . context g ) $ nodes g
+
+    arrayEntry (_, n, _, []) = (n, et ! n)
+    arrayEntry c = (n, (subtract 1) $ minimum $ map (arr !) $ filter (n /=) $ suc' c)
+      where n = node' c
+
+trueDff' :: Graph gr => gr a b -> Forest Node
 trueDff' g = dff spawnNodes g
   where spawnNodes = map rootLabel $ filter isInitial forest
         isInitial = all noEdgeFromOtherTree . flatten
