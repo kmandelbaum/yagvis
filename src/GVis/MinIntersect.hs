@@ -8,9 +8,9 @@ import Control.Exception( assert )
 import Data.Maybe( isJust, fromJust )
 import Data.IntSet( notMember, member, IntSet )
 import qualified Data.IntSet as IS
-import Control.Lens( sumOf, folded, _2, _1, over, both )
+import Control.Lens( sumOf, folded, _2, _1, over, both, view, _3 )
 import Control.Arrow( (&&&), first, second )
-import Data.List( sort, elemIndex, sortBy, minimumBy, zipWith4, foldl' )
+import Data.List( sort, elemIndex, sortBy, minimumBy, zipWith4, foldl', maximumBy )
 import Data.Functor ( fmap, (<$>) )
 import Data.Function( on )
 import Prelude
@@ -18,6 +18,7 @@ import Utility( ifF, if' )
 import Data.Ord( comparing, Down( Down ) )
 import Data.Tree( flatten )
 import qualified Data.Array as A
+import Data.Function.Memoize
 
 import qualified Debug.Trace as DT
 
@@ -57,7 +58,7 @@ findChainLeveling' g = leveling
     levMap = earlyTimes g
     maxLevel = maximum $ IM.elems levMap
     chains :: [[Node]]
-    chains = dt $ sortBy ( comparing (Down . length) ) $ chainDecompose g
+    chains = sortBy ( comparing (Down . length) ) $ chainDecomposeOpt g
     initLeveling = Leveling 0 IS.empty initNodePos
     initNodePos = IM.fromList $ zip [-1..maxLevel+1] $ repeat IM.empty
     leveling'= foldl' (flip $ insertChain levMap g) initLeveling chains
@@ -190,10 +191,32 @@ nodesToLeveling n = Leveling{ levScore = 0, levSet = lSet, levNodePos = lPosMap 
     lPosMap = toMap $ map (IM.fromList . flip zip [0..] ) n
 
 chainDecompose :: Graph gr => gr a b -> [[Node]]
-chainDecompose g | isEmpty g = []
-                 | otherwise = ns : chainDecompose g'
+chainDecompose = chainDecompose' selChain
   where 
-    ns = go initNode
-    initNode = head $ filter ( (==0) . indeg g ) $ nodes g
-    go n = let s = suc g n in if null s then [n] else n:go (head s)
-    g' = delNodes ns g
+    selChain g = go $ head $ filter ( (==0) . indeg g ) $ nodes g
+      where go n = let s = suc g n in if null s then [n] else n:go (head s)
+
+chainDecompose' :: Graph gr => ( gr a b -> [Node] ) -> gr a b -> [[Node]]
+chainDecompose' selector = decomp
+  where decomp g' | isEmpty g' = []
+                  | otherwise = let ns = selector g' in ns : decomp (delNodes ns g')
+
+chainDecomposeOpt :: Graph gr => gr a b -> [[Node]]
+chainDecomposeOpt g = decomp $ IS.fromList $ nodes g
+  where 
+    decomp :: IntSet -> [[Node]]
+    decomp s | IS.null s = []
+             | otherwise = let ns = selectChain g s in ns : decomp (foldr (IS.delete) s ns)
+
+selectChain :: Graph gr => gr a b -> IntSet -> [Node]
+selectChain g nodeSet = view _3 $ maximum $ map score ns
+  where
+    ns = IS.toList nodeSet
+    sucFun = filter ( `IS.member` nodeSet ) . suc g
+    score = memoFix score'
+    score' :: ( Node -> (Score, Int, [Node]) ) -> Node -> (Score, Int, [Node])
+    score' f n =  dpAdjust $ maximum $ (0,0,[]):map f (sucFun n)
+      where 
+        --nodeScore = Score $ deg g n
+        nodeScore = Score $ length $ filter (not . (`IS.member` nodeSet)) (suc g n ++ pre g n)
+        dpAdjust (s,l,ns) = (s + nodeScore, l + 1, n:ns)
