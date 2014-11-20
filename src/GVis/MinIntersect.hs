@@ -10,7 +10,7 @@ import Data.IntSet( notMember, member, IntSet )
 import qualified Data.IntSet as IS
 import Control.Lens( sumOf, folded, _2, _1, over, both, view, _3 )
 import Control.Arrow( (&&&), first, second )
-import Data.List( sort, elemIndex, sortBy, minimumBy, zipWith4, foldl', maximumBy )
+import Data.List( sort, elemIndex, sortBy, minimumBy, zipWith4, foldl', maximumBy, zip5 )
 import Data.Functor ( fmap, (<$>) )
 import Data.Function( on )
 import Prelude
@@ -61,7 +61,7 @@ findChainLeveling' g = leveling
     chains = sortBy ( comparing (Down . length) ) $ chainDecomposeOpt g
     initLeveling = Leveling 0 IS.empty initNodePos
     initNodePos = IM.fromList $ zip [-1..maxLevel+1] $ repeat IM.empty
-    leveling'= foldl' (flip $ insertChain levMap g) initLeveling chains
+    leveling'= foldl' ( flip $ insertChain levMap g) initLeveling chains
     leveling = leveling'{ levNodePos = IM.delete (-1) $ IM.delete (maxLevel+1) $ levNodePos leveling' }
 
 findChainLeveling :: Graph gr => gr a b -> [[Node]]
@@ -114,10 +114,11 @@ insertChain levMap g chain l@(Leveling lScore lSet lPosMap) = Leveling newScore 
     addCosts = zipWith4 insCostsForNode (nodesAdjPos True) (levelsAdjPos True) 
                                         (nodesAdjPos False) (levelsAdjPos False)
 
-    processLevel ( prevNbrsPos, numSib, addCost ) = 
-        zipWith ( first . (+) ) addCost . insertingCosts' prevNbrsPos numSib
+    processLevel ( prevNbrsPos, numSib, addCost, prevSucPos, prevPos ) = 
+        zipWith ( first . (+) ) addCost . insertingCosts' prevNbrsPos numSib prevSucPos prevPos
+
     
-    levelDesc = zip3 (levelsAdjPos False) numSiblings (tail addCosts)
+    levelDesc = zip5 (levelsAdjPos False) numSiblings (tail addCosts) (nodesAdjPos False) (tail $ nodesAdjPos True)
     initScore = zip (head addCosts) (map (:[]) [0..])
     finalScore = minimumBy (comparing fst) $ foldl' (flip processLevel) initScore levelDesc 
 
@@ -134,18 +135,27 @@ insertChain levMap g chain l@(Leveling lScore lSet lPosMap) = Leveling newScore 
 -- Inserting costs for node in the chain based on 
 -- prev node inserting costs - count only chain edge intersections
 
-insertingCosts' :: [[Pos]] -> Int -> [(Score,[Pos])] -> [(Score,[Pos])]
-insertingCosts' prevLevelNbrsPos numSiblings prevCosts = zipWith ( second . (:) ) [0..] newCosts
+insertingCosts' :: [[Pos]] -> Int -> [Pos] -> [Pos] -> [(Score,[Pos])] -> [(Score,[Pos])]
+insertingCosts' prevLevelNbrsPos numSiblings prevSucPos prevPos prevCosts = zipWith ( second . (:) ) [0..] newCosts
   where 
     newCosts = map ( minimumBy ( comparing fst ) . zipWith ( flip (first . (+))) prevCosts ) costMatrix
 
     posToInsert = [0..Pos numSiblings]
     costMatrix = map insCostsForPos posToInsert
+
+    toLefts = map ( \x -> length ( filter ( < x ) prevPos ) ) [0..]
+    toRights = map ( length prevPos - ) toLefts
     
-    insCostsForPos p = sumRLCosts (map prevLvlInter prevLevelNbrsPos)
+    insCostsForPos p = zipWith (+) addScores $ sumRLCosts (map prevLvlInter prevLevelNbrsPos)
       where 
+        -- this is unfortunately linear
+        -- TODO: can be done in O(1)
         prevLvlInter xs = let ll = length (filter ( < p ) xs) in
                               over both Score (ll, length xs - ll)
+        toLeft = length $ filter ( < p ) prevSucPos
+        toRight = length prevSucPos - toLeft
+        -- additional scores for chain intersections introduced by itself
+        addScores = zipWith ( \x y -> Score $ toLeft * x + toRight * y ) toLefts toRights
 
 -- Inserting costs for node into leveling (one adj level).
 -- first arg is node's neighbours pos 
@@ -170,8 +180,10 @@ rightLeftScore init_xs init_ys = over both Score $ calc' init_xs init_ys 0
     calc' xxs [] _ = (length xxs * len, 0)
     calc' xxs@(x:xs) yys@(y:ys) toLeft
       | x > y = calc' xxs ys (toLeft+1)
-      | x < y = let (lscore', rscore') = calc' xs yys toLeft in ( lscore'+toLeft, rscore'+len-toLeft)
-      | x == y = let ( lscore', rscore') = calc' xxs' yys' (toLeft+ylen) in (lscore'+toLeft * xlen, (rscore'+len-toLeft-ylen) * xlen)
+      | x < y = let (lscore', rscore') = calc' xs yys toLeft 
+                 in ( lscore'+toLeft, rscore'+len-toLeft)
+      | x == y = let ( lscore', rscore') = calc' xxs' yys' (toLeft+ylen) 
+                  in (lscore'+toLeft * xlen, (rscore'+len-toLeft-ylen) * xlen)
         where (xlen, xxs') = first length $ span ( == x ) xxs
               (ylen, yys') = first length $ span ( == y ) yys
 
