@@ -27,7 +27,7 @@ minimizeEdgeLength :: Graph gr => gr a b           -- Graph in a canonical form
                    -> [[Node]]                     -- Nodes at leves
                    -> IM.IntMap Double             -- Node widths
                    -> IM.IntMap Double             -- Node x - coordinates
-minimizeEdgeLength g leveling widths = dt $ assertContinuousNodes $ toIntMap $ trace (show (costFunctionGrad solution) ) solution
+minimizeEdgeLength g leveling widths = assertContinuousNodes $ toIntMap solution
   where
     solution = fst $ minimizeVD VectorBFGS2 1e-6 2000 1 1e-6 costFunction costFunctionGrad startPoint
 
