@@ -14,12 +14,14 @@ import Data.Default( def )
 
 import Data.Graph.Inductive hiding ( (&), Path )
 import Data.IntMap( fromListWith, (!), IntMap )
+import qualified Data.IntMap as IM
 import Data.Tuple( swap )
 import Data.Monoid ( mappend )
 import Data.List( partition )
 import Data.Foldable( foldMap, toList )
 import Data.Sequence( Seq )
 import Data.Semigroup.Reducer( unit )
+import GVis.MinEdgeLength
 
 import Control.Arrow( (&&&), (***) )
 import Control.Lens( _1, _2, _3, view, traverse, over )
@@ -30,7 +32,9 @@ class (Renderable DiaText.Text c, Renderable (Path R2) c, Backend c R2) => TwoDR
 
 type TwoDDiagram c = Diagram c R2
 
-vcatopts  = ( with & sep .~ 200.0 )
+vcatopts :: CatOpts R2
+vcatopts  = ( with & sep .~ 300.0 )
+hcatopts :: CatOpts R2
 hcatopts  = ( with & sep .~ 20.0 )
 
 defaultArrowOpt :: ArrowOpts
@@ -94,19 +98,23 @@ convertGraph g = ( bindCross . bindRegular . removeCrossEdges ) g
     removeCrossEdges = efilter ( not . isCrossLevel )
 
 graphToDia :: (DynGraph gr, TwoDRender c) => GVRepGraph gr a b -> TwoDDiagram c
-graphToDia g = connectEdges g $ hvcat' hcatopts vcatopts dLevels
-  where dLevels = ( map . map ) nodeToDia $ map toList $ toList nLevels
+--graphToDia g = connectEdges g $ hvcat' hcatopts vcatopts dLevels
+graphToDia g = connectEdges g $ vcat' vcatopts $ map ( mconcat . map (\n -> translate (r2 (xPoss ! n,0)) (ds ! n) ) ) nLevels
+  where 
+        --dLevels = ( map . map ) (ds !) $ map toList $ toList nLevels
 
-        --nLevels :: IntMap (Seq Node)
-        --nLevels = fromListWith mappend acsList
-          --where acsList = map ( (gvLevel *** unit) . swap ) $ labNodes g
         nLevels :: [[Node]]
-        nLevels = findChainLeveling $ elfilter (null . gvPartNodes) g
+        nLevels = findChainLeveling g' 
+        g' = elfilter (null . gvPartNodes) g
+
+        ds = IM.fromList $ map ( id &&& nodeToDia ) $ nodes g'
+
+        xPoss = minimizeEdgeLength g' nLevels ( fmap width ds )
 
         nodeToDia n = named n $ maybe invisNode (const visNode) d
           where GVRepNode{ gvNodeData = d } = fromJust $ lab g n
-                invisNode = center $ rect 40 10 # lw none
-                visNode = center $ strutX 50 ||| ( ellipseXY 100 60 # lw thin <> text (show n) # fontSize (Local 40) ) ||| strutX 50
+                invisNode = center $ rect 100 10 # lw none
+                visNode = center $ strutX 100 ||| ( ellipseXY 150 60 # lw thin <> text (show n) # fontSize (Local 40) ) ||| strutX 100
 
 --connectShort :: (TwoDRender c, Graph gr) => gr a (GVRepEdge b) -> TwoDDiagram c -> TwoDDiagram c
 --connectShort g = straitArrows e
