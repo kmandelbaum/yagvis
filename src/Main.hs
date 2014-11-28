@@ -10,7 +10,6 @@ import Diagrams.Backend.Gtk
 import Diagrams.Backend.Cairo
 import Data.NumInstances.Tuple
 import Utility
-import GVis.Simple
 import GVis.GraphAlgo
 import GVis.GVis( graphToDia, convertGraph, TwoDRender)
 import Control.Lens( over, both )
@@ -104,10 +103,7 @@ main = do
            eTransfm = eTranslation `union` eScrollTransfm `union` eZoomTransfm
            bTransfm = accumB ( scalingY (-1) <> translation ( r2 initialCenter) ) $ (<>) <$> eTransfm
 
-           --bDiagram = (transform <$> bTransfm) <*> pure theDia
-           --bDiagram = (transform <$> bTransfm) <*> pure ( edgeSimple $ vertToRect graph )
            bDiagram = (transform <$> bTransfm) <*> pure ( graphToDia graph )
-           --eKeyArrow = filter
 
            bAreaSize = stepper initialSize eAreaSize
            bAreaCenter = ( over both ( (0.5*) .fromIntegral ) ) <$> bAreaSize
@@ -115,8 +111,6 @@ main = do
        reactimate ( draw <$> bDiagram <@> eExpose )
        reactimate ( ( redraw =<< widgetGetDrawWindow drawingArea ) <$ eNeedRefresh)
        reactimate ( ( \x-> print $ fromMaybe (show $ keyName x) ( show <$> keyToChar x) ) <$> eKeyPressed )
-       --reactimate ( print <$> bAreaCenter <@ eAreaSize )
-       --reactimate (print <$> ez )
        sink window [ windowTitle :== (show <$> bMouseCoords) ]
        return ()
 

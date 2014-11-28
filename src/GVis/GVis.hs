@@ -33,7 +33,7 @@ class (Renderable DiaText.Text c, Renderable (Path R2) c, Backend c R2) => TwoDR
 type TwoDDiagram c = Diagram c R2
 
 vcatopts :: CatOpts R2
-vcatopts  = ( with & sep .~ 300.0 )
+vcatopts  = ( with & sep .~ 150.0 )
 hcatopts :: CatOpts R2
 hcatopts  = ( with & sep .~ 20.0 )
 
@@ -113,15 +113,9 @@ graphToDia g = connectEdges g $ vcat' vcatopts $ map ( mconcat . map (\n -> tran
 
         nodeToDia n = named n $ maybe invisNode (const visNode) d
           where GVRepNode{ gvNodeData = d } = fromJust $ lab g n
-                invisNode = center $ rect 100 10 # lw none
-                visNode = center $ strutX 100 ||| ( ellipseXY 150 60 # lw thin <> text (show n) # fontSize (Local 40) ) ||| strutX 100
+                invisNode = center $ rect 140 40 # lw none
+                visNode = center $ strutX 40 ||| ( ellipseXY 100 60 # lw thin <> text (show n) # fontSize (Local 40) ) ||| strutX 40
 
---connectShort :: (TwoDRender c, Graph gr) => gr a (GVRepEdge b) -> TwoDDiagram c -> TwoDDiagram c
---connectShort g = straitArrows e
---  where isShort = null . gvPartNodes . view _3
---        e = map ( \(x,y,_) -> (x,y) ) $ filter isShort $ labEdges g
-
---connectEdges g d = straitArrows d $ edges g
 connectEdges :: (TwoDRender c, DynGraph gr) => gr a (GVRepEdge b) -> TwoDDiagram c -> TwoDDiagram c
 connectEdges g = connectLong . connectShort
   where connectShort = straitArrows shorts'

@@ -22,6 +22,9 @@ dt x = trace (show x) x
 spaceWidth :: Double
 spaceWidth = 100.0
 
+sgnPow :: Floating a => a -> a -> a
+sgnPow x = (signum x *) . (abs x**)
+
 -- graph node ids are canonical is asserted
 minimizeEdgeLength :: Graph gr => gr a b           -- Graph in a canonical form
                    -> [[Node]]                     -- Nodes at leves
@@ -29,13 +32,14 @@ minimizeEdgeLength :: Graph gr => gr a b           -- Graph in a canonical form
                    -> IM.IntMap Double             -- Node x - coordinates
 minimizeEdgeLength g leveling widths = assertContinuousNodes $ toIntMap solution
   where
-    solution = fst $ minimizeVD VectorBFGS2 1e-6 2000 1 1e-6 costFunction costFunctionGrad startPoint
+    solution = fst $ minimizeVD ConjugatePR 1e-6 2000 1 1e-6 costFunction costFunctionGrad startPoint
 
     costFunction :: Vector Double -> Double
     costFunction curX = (sum $ map edgeWeight allEdges) + (sum $ map (uncurry nbrWeight) levelNbrsRight)
       where
-        edgeWeight (n1, n2) = ((curX ! n1) - (curX ! n2)) ** 2
-        nbrWeight n1 n2 = 100 * if d > 0 then d ** 2 else 0
+        --edgeWeight (n1, n2) = ((curX ! n1) - (curX ! n2)) ** 2
+        edgeWeight (n1, n2) = abs ((curX ! n1) - (curX ! n2)) ** 1.2 
+        nbrWeight n1 n2 = 10 * if d > 0 then d ** 2 else 0
           where 
             d = (curX ! n1 + (widths IM.! n1 + widths IM.! n2) / 2 - curX ! n2)
 
@@ -43,10 +47,10 @@ minimizeEdgeLength g leveling widths = assertContinuousNodes $ toIntMap solution
     costFunctionGrad curX = GV.map (*2) $ GV.accum (+) (defaultVector 0) $
         assocList ++ map nbrGradAssoc1 levelNbrsRight ++ map nbrGradAssoc2 levelNbrsRight
       where
-        edgeGrad (n1, n2) = (n1, curX ! n1 - curX ! n2)
+        edgeGrad (n1, n2) = (n1, 0.6 * sgnPow (curX ! n1 - curX ! n2) 0.2)
         assocList = map edgeGrad allEdges ++ map (edgeGrad . swap) allEdges
-        nbrGradAssoc1 (n1,n2) = let d' = 100 * d n1 n2 in (n1, if d' > 0 then d' else 0)
-        nbrGradAssoc2 (n1,n2) = let d' = 100 * d n1 n2 in (n2, if d' > 0 then negate d' else 0)
+        nbrGradAssoc1 (n1,n2) = let d' = 10 * d n1 n2 in (n1, if d' > 0 then d' else 0)
+        nbrGradAssoc2 (n1,n2) = let d' = 10 * d n1 n2 in (n2, if d' > 0 then negate d' else 0)
         d n1 n2 = (curX ! n1 + (widths IM.! n1 + widths IM.! n2) / 2 - curX ! n2)
 
     startPoint :: Vector Double

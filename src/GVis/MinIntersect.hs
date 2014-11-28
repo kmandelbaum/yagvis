@@ -8,7 +8,7 @@ import Control.Exception( assert )
 import Data.Maybe( isJust, fromJust )
 import Data.IntSet( notMember, member, IntSet )
 import qualified Data.IntSet as IS
-import Control.Lens( sumOf, folded, _2, _1, over, both, view, _3 )
+import Control.Lens( sumOf, folded, _2, _1, over, both, view, _3, _4 )
 import Control.Arrow( (&&&), first, second )
 import Data.List( sort, elemIndex, sortBy, minimumBy, zipWith4, foldl', maximumBy, zip5 )
 import Data.Functor ( fmap, (<$>) )
@@ -62,7 +62,8 @@ findChainLeveling' g = leveling
     initLeveling = Leveling 0 IS.empty initNodePos
     initNodePos = IM.fromList $ zip [-1..maxLevel+1] $ repeat IM.empty
     leveling'= foldl' ( flip $ insertChain levMap g) initLeveling chains
-    leveling = leveling'{ levNodePos = IM.delete (-1) $ IM.delete (maxLevel+1) $ levNodePos leveling' }
+    leveling'' = foldl' ( flip $ reinsertChain levMap g) leveling' chains
+    leveling = leveling''{ levNodePos = IM.delete (-1) $ IM.delete (maxLevel+1) $ levNodePos leveling''}
 
 findChainLeveling :: Graph gr => gr a b -> [[Node]]
 findChainLeveling = levelingToNodes . findChainLeveling'
@@ -88,6 +89,36 @@ insertNode gLevMap g n l@(Leveling lScore lSet lNodePos) =
     newNodePos = IM.insert myLevel newCurNodePos lNodePos
     newScore = lScore + bestScore
     newSet = IS.insert n lSet
+
+removeChain :: Int -> [Node] -> Leveling -> Leveling
+removeChain firstLevel chain l@(Leveling lScore lSet lPosMap) = Leveling newScore newSet newPosMap
+  where
+    lastLevel = firstLevel + length chain - 1
+    levels = [firstLevel..lastLevel] 
+
+    (untHead, tmpTail) = span ( ( < firstLevel) . fst ) $ IM.toList lPosMap
+    (modMiddle,untTail) = span ( ( <= lastLevel ) . fst ) tmpTail
+
+    newMiddle = zip levels newMaps
+    newPosMap = IM.fromList $ untHead ++ newMiddle ++ untTail
+    newMaps = zipWith removeFromLevel chain levels
+
+    removeFromLevel n level = removeFromMap n (lPosMap ! level)
+    removeFromMap n m = IM.map ( ifF ( > p ) pred id ) $ IM.delete n m
+
+      where p = m ! n
+    newSet = foldr IS.delete lSet chain
+    -- TODO: calculate score
+    newScore = lScore
+
+reinsertChain :: Graph gr => IntMap Int ->
+                             gr a b ->
+                             [Node] ->
+                             Leveling -> 
+                             Leveling
+reinsertChain levMap g chain = -- removeChain firstLevel chain
+  insertChain levMap g chain . removeChain firstLevel chain
+    where firstLevel = levMap ! (head chain)
 
 insertChain :: Graph gr => IntMap Int ->
                            gr a b ->
@@ -158,8 +189,8 @@ insertingCosts' prevLevelNbrsPos numSiblings prevSucPos prevPos prevCosts = zipW
         addScores = zipWith ( \x y -> Score $ toLeft * x + toRight * y ) toLefts toRights
 
 -- Inserting costs for node into leveling (one adj level).
--- first arg is node's neighbours pos 
--- second arg is adjacent level's neighbours pos,
+-- first arg is node's neighbors pos 
+-- second arg is adjacent level's neighbors pos,
 -- ( in the same direction as the adjacent levels )
 
 insertingCosts'' :: [Pos] -> [[Pos]] -> [Score]
@@ -221,14 +252,16 @@ chainDecomposeOpt g = decomp $ IS.fromList $ nodes g
              | otherwise = let ns = selectChain g s in ns : decomp (foldr (IS.delete) s ns)
 
 selectChain :: Graph gr => gr a b -> IntSet -> [Node]
-selectChain g nodeSet = view _3 $ maximum $ map score ns
+selectChain g nodeSet = view _4 $ maximum $ map score ns
   where
     ns = IS.toList nodeSet
     sucFun = filter ( `IS.member` nodeSet ) . suc g
     score = memoFix score'
-    score' :: ( Node -> (Score, Int, [Node]) ) -> Node -> (Score, Int, [Node])
-    score' f n =  dpAdjust $ maximum $ (0,0,[]):map f (sucFun n)
+    score' :: ( Node -> (Score, Score, Int, [Node]) ) -> Node -> (Score, Score, Int, [Node])
+    score' f n =  dpAdjust $ maximum $ (0,0,0,[]):map f (sucFun n)
       where 
         --nodeScore = Score $ deg g n
-        nodeScore = Score $ length $ filter (not . (`IS.member` nodeSet)) (suc g n ++ pre g n)
-        dpAdjust (s,l,ns) = (s + nodeScore, l + 1, n:ns)
+        nodeScore1 = Score $ length $ filter (not . (`IS.member` nodeSet)) nbrs
+        nodeScore2 = 0 -- Score $ length nbrs
+        nbrs = neighbors g n
+        dpAdjust (s1,s2,l,ns) = (s1 + nodeScore1, s2 + nodeScore2, l + 1, n:ns)
