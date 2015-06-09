@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies,TypeSynonymInstances,RankNTypes,FlexibleContexts,ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies,TypeSynonymInstances,RankNTypes,FlexibleContexts,ScopedTypeVariables, MultiParamTypeClasses #-}
 module GVis.GVis where
 
 
@@ -8,6 +8,7 @@ import Diagrams.Core.Style
 
 import GVis.GraphAlgo( earlyTimes )
 import GVis.MinIntersect ( findChainLeveling, findGoodLeveling )
+import GVis.MinEdgeLength
 
 import Data.Maybe( fromMaybe, fromJust, isJust )
 import Data.Default( def )
@@ -16,30 +17,30 @@ import Data.Graph.Inductive hiding ( (&), Path )
 import Data.IntMap( fromListWith, (!), IntMap )
 import qualified Data.IntMap as IM
 import Data.Tuple( swap )
-import Data.Monoid ( mappend )
 import Data.List( partition )
+import Data.Monoid ( mappend )
 import Data.Foldable( foldMap, toList )
 import Data.Sequence( Seq )
 import Data.Semigroup.Reducer( unit )
-import GVis.MinEdgeLength
+import Linear as L
+
 
 import Control.Arrow( (&&&), (***) )
 import Control.Lens( _1, _2, _3, view, traverse, over )
 
 import Debug.Trace as DT
 
-class (Renderable DiaText.Text c, Renderable (Path R2) c, Backend c R2) => TwoDRender c
+class (Renderable (DiaText.Text (N c)) c, Renderable (Path V2 (N c)) c, Backend c V2 (N c), V c ~ V2, TypeableFloat (N c)) => TwoDRender c
 
-type TwoDDiagram c = Diagram c R2
+type TwoDDiagram c = Diagram c
 
-vcatopts :: CatOpts R2
+vcatopts :: RealFloat n => CatOpts n
 vcatopts  = ( with & sep .~ 150.0 )
-hcatopts :: CatOpts R2
+hcatopts :: RealFloat n => CatOpts n
 hcatopts  = ( with & sep .~ 20.0 )
 
-defaultArrowOpt :: ArrowOpts
-defaultArrowOpt = with & headLength .~ (Local 40) & shaftStyle .~ (lineWidth thin mempty) & arrowTail .~ noTail
-
+defaultArrowOpt :: TypeableFloat n => ArrowOpts n
+defaultArrowOpt = with & headLength .~ (local 40) & shaftStyle .~ (lineWidth thin mempty) & arrowTail .~ noTail
 
 -- horizontal into vertical cat
 hvcat' ::  ( Monoid a,
@@ -47,8 +48,9 @@ hvcat' ::  ( Monoid a,
              Juxtaposable a,
              Semigroup a,
              Alignable a,
-             V a ~ R2 ) =>
-    CatOpts R2 -> CatOpts R2 -> [[a]] -> a
+             V a ~ V2,
+             Floating (N a) ) =>
+    CatOpts (N a) -> CatOpts (N a) -> [[a]] -> a
 hvcat' hCatOpts vCatOpts xs = vcat' vCatOpts $ map ( \x -> hcat' hCatOpts x # center ) xs
 
 --internal representation data type for visualizable graphs
@@ -97,7 +99,7 @@ convertGraph g = ( bindCross . bindRegular . removeCrossEdges ) g
     crossEdges = filter isCrossLevel $ labEdges g
     removeCrossEdges = efilter ( not . isCrossLevel )
 
-graphToDia :: (DynGraph gr, TwoDRender c) => GVRepGraph gr a b -> TwoDDiagram c
+graphToDia :: (DynGraph gr, TwoDRender c, N c ~ Double) => GVRepGraph gr a b -> TwoDDiagram c
 --graphToDia g = connectEdges g $ hvcat' hcatopts vcatopts dLevels
 graphToDia g = connectEdges g $ vcat' vcatopts $ map ( mconcat . map (\n -> translate (r2 (xPoss ! n,0)) (ds ! n) ) ) nLevels
   where 
@@ -114,9 +116,9 @@ graphToDia g = connectEdges g $ vcat' vcatopts $ map ( mconcat . map (\n -> tran
         nodeToDia n = named n $ maybe invisNode (const visNode) d
           where GVRepNode{ gvNodeData = d } = fromJust $ lab g n
                 invisNode = center $ rect 140 40 # lw none
-                visNode = center $ strutX 40 ||| ( ellipseXY 100 60 # lw thin <> text (show n) # fontSize (Local 40) ) ||| strutX 40
+                visNode = center $ strutX 40 ||| ( ellipseXY 100 60 # lw thin <> text (show n) # fontSize (local 40) ) ||| strutX 40
 
-connectEdges :: (TwoDRender c, DynGraph gr) => gr a (GVRepEdge b) -> TwoDDiagram c -> TwoDDiagram c
+connectEdges :: (Epsilon (N c), TwoDRender c, DynGraph gr) => gr a (GVRepEdge b) -> TwoDDiagram c -> TwoDDiagram c
 connectEdges g = connectLong . connectShort
   where connectShort = straitArrows shorts'
         connectLong = splineArrows longs
@@ -124,10 +126,10 @@ connectEdges g = connectLong . connectShort
         shorts' = map ( view _1 &&& view _2 ) $ filter ( isJust . gvEdgeData . view _3 ) shorts
         isShort = null . gvPartNodes . view _3
 
-straitArrows :: (TwoDRender c) => [Edge] -> TwoDDiagram c -> TwoDDiagram c
+straitArrows :: TwoDRender c => [Edge] -> TwoDDiagram c -> TwoDDiagram c
 straitArrows = flip $ foldr ( uncurry ( connectOutside' defaultArrowOpt ) )
 
-splineArrows :: (TwoDRender c) => [LEdge (GVRepEdge a)] -> TwoDDiagram c -> TwoDDiagram c
+splineArrows :: (Epsilon (N c), TwoDRender c) => [LEdge (GVRepEdge a)] -> TwoDDiagram c -> TwoDDiagram c
 splineArrows es d = d <> foldMap edgeSubDia es
   where 
     edgeSubDia (from, to, GVRepEdge _ partNodes) = arrowBetween' (defaultArrowOpt & arrowShaft .~ shaft) fromEnd toEnd
@@ -142,7 +144,7 @@ splineArrows es d = d <> foldMap edgeSubDia es
                              l2 = location $ getSubDia n2
                              d = l2 .-. l1
                              end = fromMaybe l1 (maxTraceP l1 d s1)
-                             adjustment = 40 *^ normalized d
+                             adjustment = 40 *^ L.normalize d
                          in (end, end .+^ adjustment)
         shaft = cubicSpline False locs
 fromJustMsg = flip ( fromMaybe . error )

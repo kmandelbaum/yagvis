@@ -7,4 +7,3 @@ if' False _ y = y
 
 ifF :: (a -> Bool) -> (a -> b) -> (a -> b) -> a -> b
 ifF = liftA3 if'
-
