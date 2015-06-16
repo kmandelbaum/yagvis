@@ -1,14 +1,11 @@
 module GVis.GraphAlgo where
 import Data.Foldable ( maximum, minimum )
-import Data.Text.Lazy.IO ( readFile )
-import Prelude hiding ( readFile, maximum, minimum )
+import Prelude hiding ( maximum, minimum )
+import Data.GraphViz( Attributes )
 import Data.GraphViz.Types.Canonical( DotGraph )
-import Data.GraphViz.Parsing( parse, runParser, Parse )
-import Data.GraphViz (dotToGraph, Attributes)
 import Data.GraphViz.Attributes.Complete( DirType( Back ), Attribute(Dir) )
 
 import Data.Graph.Inductive.Query.DFS ( dff, dff' )
-import Data.Graph.Inductive.PatriciaTree( Gr )
 import Data.Graph.Inductive( pre, pre', suc', Graph, node', nodes, context, out', inn', lab', gmap, LEdge,
                              nodeRange, elfilter, DynGraph, Context, Node)
 import Data.Function(on)
@@ -24,14 +21,6 @@ import Data.Functor ( (<$>) )
 import Utility( ifF )
 import Numeric.Interval( (...) )
 import qualified Numeric.Interval as Inter
-
-parser :: Parse ( DotGraph Node )
-parser = parse 
-
-loadGraph :: IO ( Either String (Gr Attributes Attributes) )
-loadGraph = do
-    file <- readFile "data/1.dot"
-    return $ (dotToGraph <$>) $ fst $ runParser parser file
 
 revertBackEdges :: (DynGraph gr) => gr a Attributes -> gr a Attributes
 revertBackEdges = gmap revertBackEdge
@@ -102,6 +91,5 @@ trueDff' g = dff spawnNodes g
 toLevels :: Graph gr => gr a b -> IntMap [Node]
 toLevels g = fromListWith mappend (map (second unit . swap) $ assocs $ (earlyTimes g))
 
-unright (Right x) = x
-
-prepareGraph = revertBackEdges <$> unright <$> loadGraph
+prepareGraph :: DynGraph gr => gr Attributes Attributes -> gr Attributes Attributes
+prepareGraph = revertBackEdges

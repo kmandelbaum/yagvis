@@ -1,21 +1,40 @@
-{-# LANGUAGE ScopedTypeVariables,GADTs,FlexibleContexts,TypeSynonymInstances #-} -- allows "forall t. Moment t" module Main where
-import Graphics.UI.Gtk
+{-# LANGUAGE ScopedTypeVariables,GADTs,FlexibleContexts,TypeSynonymInstances #-} -- allows "forall t. Moment t"
+module Main where
+import Prelude hiding ( readFile, hGetContents )
+
+import Control.Lens( over, both )
+
 import Data.Maybe
+import Data.NumInstances.Tuple
+import Data.Text.Lazy.IO ( readFile, hGetContents )
+import Data.Text.Lazy
+import Data.Graph.Inductive
+import Data.Graph.Inductive.PatriciaTree( Gr )
+import Data.GraphViz.Parsing( parse, runParser, Parse )
+import Data.GraphViz (dotToGraph, Attributes)
+import Data.GraphViz.Types.Canonical( DotGraph )
+
+import System.IO hiding (hGetContents)
+import System.Environment
+
+import Graphics.UI.Gtk
+
 import Reactive.Banana hiding (apply)
 import Reactive.Banana.Frameworks
 import Reactive.Banana.Gtk
+
 import Diagrams.Prelude hiding (stroke, moveTo, scale)
 import Diagrams.Transform
 import Diagrams.Backend.Gtk
 import Diagrams.Backend.Cairo
-import Data.NumInstances.Tuple
-import Utility
+
 import GVis.GraphAlgo
 import GVis.GVis( graphToDia, convertGraph, TwoDRender)
-import Control.Lens( over, both )
+
+import Utility
 import Options
 
-instance TwoDRender B where
+instance TwoDRender B
 
 dir2int :: ScrollDirection -> Int
 dir2int ScrollUp = 1
@@ -30,12 +49,6 @@ keyToZoom '+' = 1.1
 keyToZoom '-' = 1.1 ** (-1)
 keyToZoom x = error $ "Illegal key for zoom: " ++ show x
 
-theDia :: Diagram B
-theDia = undefined
---theDia = circle 110 # fc green
---theDia = connectOutside' (with & headLength .~ (Local 20) & gap .~(Local 10)) "c1" "c2" $ rotateBy (1/3) $ showOrigin $ center $ named "c1" (circle 20 <> text "1") ||| strutX 100 ||| named "c2" (circle 20)
---theDia g =
-
 draw :: DrawableClass dc => Diagram B -> dc -> IO( )
 draw d dc = renderToGtk dc d
 
@@ -47,8 +60,16 @@ redraw w = do
 scrollTransfm :: (HasLinearMap v, Fractional n, Eq n) => v n -> n -> Transformation v n
 scrollTransfm v s = scale s $ translation $ (1/s - 1) *^ v
 
+parseGraph :: Text -> Either String (Gr Attributes Attributes)
+parseGraph file =
+  (dotToGraph <$>) $ fst $ runParser parser file
+  where
+    parser = parse :: Parse ( DotGraph Node )
+
 --main function
 main = do
+   args <- getArgs
+   let cfg = parseArgs args
    -- the GTK's init gui
    initGUI
    -- create a new window
@@ -68,14 +89,16 @@ main = do
    initialSize <- widgetGetSize drawingArea
    let initialCenter = (over both ( (0.5*) . fromIntegral) ) initialSize
 
-   graph' <- prepareGraph
+   handle <- if isJust (filename cfg) 
+             then openFile (fromJust $ filename cfg) ReadMode
+             else return stdin
+  
+   file <- hGetContents handle
+   let graph0 = (\(Right x) -> x) $ parseGraph file :: Gr Attributes Attributes
 
-   let graph = convertGraph graph'
+   let graph = convertGraph $ prepareGraph graph0
 
-   --print graph
-
-
-   -- describe the ractive network
+   -- describe the reactive network
    let networkDescription :: forall t. Frameworks t => Moment t ()
        networkDescription = do
 
