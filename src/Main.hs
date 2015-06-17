@@ -5,14 +5,15 @@ import Prelude hiding ( readFile, hGetContents )
 import Control.Lens( over, both )
 
 import Data.Maybe
+import qualified Data.Map as M
 import Data.NumInstances.Tuple
 import Data.Text.Lazy.IO ( readFile, hGetContents )
-import Data.Text.Lazy
-import Data.Graph.Inductive
+import Data.Text.Lazy ( Text )
+import Data.Graph.Inductive hiding (graphNodes)
 import Data.Graph.Inductive.PatriciaTree( Gr )
 import Data.GraphViz.Parsing( parse, runParser, Parse )
-import Data.GraphViz (dotToGraph, Attributes)
-import Data.GraphViz.Types.Canonical( DotGraph )
+import Data.GraphViz (dotToGraph, Attributes, mapDotGraph, nodeID, graphNodes)
+import Data.GraphViz.Types.Generalised( DotGraph )
 
 import System.IO hiding (hGetContents)
 import System.Environment
@@ -61,15 +62,18 @@ scrollTransfm :: (HasLinearMap v, Fractional n, Eq n) => v n -> n -> Transformat
 scrollTransfm v s = scale s $ translation $ (1/s - 1) *^ v
 
 parseGraph :: Text -> Either String (Gr Attributes Attributes)
-parseGraph file =
-  (dotToGraph <$>) $ fst $ runParser parser file
+parseGraph file = do
+  parsed <- fst $ runParser parser file
+  let mapped = mapDotGraph ( nodesMap M.! ) parsed
+      nodesMap = M.fromList $ zip ns [0..]
+      ns = map nodeID $ graphNodes parsed
+      --ns = ["1", "2"]
+  return $ dotToGraph mapped 
   where
-    parser = parse :: Parse ( DotGraph Node )
+    parser = parse :: Parse ( DotGraph String )
 
---main function
-main = do
-   args <- getArgs
-   let cfg = parseArgs args
+mainWithGraph :: Gr Attributes Attributes -> IO ()
+mainWithGraph graph0 = do
    -- the GTK's init gui
    initGUI
    -- create a new window
@@ -89,15 +93,7 @@ main = do
    initialSize <- widgetGetSize drawingArea
    let initialCenter = (over both ( (0.5*) . fromIntegral) ) initialSize
 
-   handle <- if isJust (filename cfg) 
-             then openFile (fromJust $ filename cfg) ReadMode
-             else return stdin
-  
-   file <- hGetContents handle
-   let graph0 = (\(Right x) -> x) $ parseGraph file :: Gr Attributes Attributes
-
    let graph = convertGraph $ prepareGraph graph0
-
    -- describe the reactive network
    let networkDescription :: forall t. Frameworks t => Moment t ()
        networkDescription = do
@@ -141,3 +137,17 @@ main = do
    network <- compile networkDescription
    actuate network
    mainGUI
+--main function
+main = do
+  args <- getArgs
+  let cfg = parseArgs args
+  handle <- if isJust (filename cfg)
+            then openFile (fromJust $ filename cfg) ReadMode
+            else return stdin
+
+  file <- hGetContents handle
+  case parseGraph file of
+    Left err -> do
+      putStrLn "Error while parsing the graph:"
+      putStrLn err
+    Right graph -> mainWithGraph graph
