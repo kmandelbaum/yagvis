@@ -2,9 +2,9 @@
 module GVis.GVis where
 
 
-import Diagrams.Prelude hiding ( view )
+import Diagrams.Prelude hiding ( view, Attribute, Context )
 import Diagrams.TwoD.Text as DiaText
-import Diagrams.Core.Style
+import Diagrams.Core.Style hiding (Attribute)
 
 import GVis.GraphAlgo( earlyTimes )
 import GVis.MinIntersect ( findChainLeveling, findGoodLeveling )
@@ -13,6 +13,8 @@ import GVis.MinEdgeLength
 import Data.Maybe( fromMaybe, fromJust, isJust )
 import Data.Default( def )
 
+import Data.GraphViz (Attributes, Attribute)
+import Data.GraphViz.Attributes.Complete (Attribute(Dir), DirType(Back))
 import Data.Graph.Inductive hiding ( (&), Path )
 import Data.IntMap( fromListWith, (!), IntMap )
 import qualified Data.IntMap as IM
@@ -99,14 +101,14 @@ convertGraph g = ( bindCross . bindRegular . removeCrossEdges ) g
     crossEdges = filter isCrossLevel $ labEdges g
     removeCrossEdges = efilter ( not . isCrossLevel )
 
-graphToDia :: (DynGraph gr, TwoDRender c, N c ~ Double) => GVRepGraph gr a b -> TwoDDiagram c
+graphToDia :: (DynGraph gr, TwoDRender c, N c ~ Double) => GVRepGraph gr a Attributes -> TwoDDiagram c
 --graphToDia g = connectEdges g $ hvcat' hcatopts vcatopts dLevels
-graphToDia g = connectEdges g $ vcat' vcatopts $ map ( mconcat . map (\n -> translate (r2 (xPoss ! n,0)) (ds ! n) ) ) nLevels
-  where 
+graphToDia g = connectEdges (revertBackEdgesInGVRep g) $ vcat' vcatopts $ map ( mconcat . map (\n -> translate (r2 (xPoss ! n,0)) (ds ! n) ) ) nLevels
+  where
         --dLevels = ( map . map ) (ds !) $ map toList $ toList nLevels
 
         nLevels :: [[Node]]
-        nLevels = findChainLeveling g' 
+        nLevels = findChainLeveling g'
         g' = elfilter (null . gvPartNodes) g
 
         ds = IM.fromList $ map ( id &&& nodeToDia ) $ nodes g'
@@ -131,11 +133,11 @@ straitArrows = flip $ foldr ( uncurry ( connectOutside' defaultArrowOpt ) )
 
 splineArrows :: (Epsilon (N c), TwoDRender c) => [LEdge (GVRepEdge a)] -> TwoDDiagram c -> TwoDDiagram c
 splineArrows es d = d <> foldMap edgeSubDia es
-  where 
-    edgeSubDia (from, to, GVRepEdge _ partNodes) = arrowBetween' (defaultArrowOpt & arrowShaft .~ shaft) fromEnd toEnd
-      where 
+  where
+    edgeSubDia (from, to, GVRepEdge (Just attrs) partNodes) = arrowBetween' (defaultArrowOpt & arrowShaft .~ shaft) fromEnd toEnd
+      where
         fromEnd = fst $ arrowEnd from $ head partNodes
-        (toEnd, toEnd') = arrowEnd to $ last partNodes 
+        (toEnd, toEnd') = arrowEnd to $ last partNodes
         locs = fromEnd:map (location . getSubDia) partNodes ++ [toEnd']
         getSubDia n = fromJustMsg (lookupName n d) $
             "Error: name " ++ show n ++ " isn't in the diagram"
@@ -148,3 +150,17 @@ splineArrows es d = d <> foldMap edgeSubDia es
                          in (end, end .+^ adjustment)
         shaft = cubicSpline False locs
 fromJustMsg = flip ( fromMaybe . error )
+
+revertBackEdgesInGVRep :: DynGraph gr =>
+  GVRepGraph gr a Attributes ->
+  GVRepGraph gr a Attributes
+revertBackEdgesInGVRep g = gmap revertBack g
+  where
+    revertBack :: Context a (GVRepEdge Attributes) -> Context a (GVRepEdge Attributes)
+    revertBack (i, n, d, o) = (i', n, d, o')
+      where
+        isBack (GVRepEdge (Just attrs) _, _) = elem (Dir Back) attrs
+        isBack _ = False
+        i' = map rev (filter isBack o) ++ filter (not . isBack) i
+        o' = map rev (filter isBack i) ++ filter (not . isBack) o
+        rev (GVRepEdge attrs ns, n) = (GVRepEdge attrs $ reverse ns, n)
