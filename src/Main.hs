@@ -14,9 +14,14 @@ import Data.Graph.Inductive.PatriciaTree( Gr )
 import Data.GraphViz.Parsing( parse, runParser, Parse )
 import Data.GraphViz (dotToGraph, Attributes, mapDotGraph, nodeID, graphNodes)
 import Data.GraphViz.Types.Generalised( DotGraph )
+import Data.Tree
 
 import System.IO hiding (hGetContents)
 import System.Environment
+
+-- Fixme
+import System.Exit
+import qualified Debug.Trace as DBG
 
 import Graphics.UI.Gtk
 
@@ -31,6 +36,8 @@ import Diagrams.Backend.Cairo
 
 import GVis.GraphAlgo
 import GVis.GVis( graphToDia, convertGraph, TwoDRender)
+import GVis.GVis
+import GVis.MinIntersect
 
 import Utility
 import Options
@@ -64,16 +71,19 @@ scrollTransfm v s = scale s $ translation $ (1/s - 1) *^ v
 parseGraph :: Text -> Either String (Gr Attributes Attributes)
 parseGraph file = do
   parsed <- fst $ runParser parser file
+  --DBG.trace (show parsed) (Left "wrong graph")
   let mapped = mapDotGraph ( nodesMap M.! ) parsed
       nodesMap = M.fromList $ zip ns [0..]
       ns = map nodeID $ graphNodes parsed
       --ns = ["1", "2"]
-  return $ dotToGraph mapped 
+  return $ dotToGraph mapped
   where
     parser = parse :: Parse ( DotGraph String )
 
 mainWithGraph :: Gr Attributes Attributes -> IO ()
 mainWithGraph graph0 = do
+   let graph = convertGraph $ prepareGraph graph0
+       dia = graphToDia graph
    -- the GTK's init gui
    initGUI
    -- create a new window
@@ -93,7 +103,6 @@ mainWithGraph graph0 = do
    initialSize <- widgetGetSize drawingArea
    let initialCenter = (over both ( (0.5*) . fromIntegral) ) initialSize
 
-   let graph = convertGraph $ prepareGraph graph0
    -- describe the reactive network
    let networkDescription :: forall t. Frameworks t => Moment t ()
        networkDescription = do
@@ -123,14 +132,14 @@ mainWithGraph graph0 = do
              eTransfm = eTranslation `union` eScrollTransfm `union` eZoomTransfm
              bTransfm = accumB ( scalingY (-1) <> translation ( r2 initialCenter) ) $ (<>) <$> eTransfm
 
-             bDiagram = (transform <$> bTransfm) <*> pure ( graphToDia graph )
+             bDiagram = (transform <$> bTransfm) <*> pure dia
 
              bAreaSize = stepper initialSize eAreaSize
              bAreaCenter = ( over both ( (0.5*) .fromIntegral ) ) <$> bAreaSize
 
          reactimate ( draw <$> bDiagram <@> eExpose )
          reactimate ( ( redraw =<< widgetGetDrawWindow drawingArea ) <$ eNeedRefresh)
-         reactimate ( ( \x-> print $ fromMaybe (show $ keyName x) ( show <$> keyToChar x) ) <$> eKeyPressed )
+         --reactimate ( ( \x-> print $ fromMaybe (show $ keyName x) ( show <$> keyToChar x) ) <$> eKeyPressed )
          sink window [ windowTitle :== (show <$> bMouseCoords) ]
          return ()
 
@@ -143,7 +152,7 @@ main = do
   let cfg = parseArgs args
   handle <- if isJust (filename cfg)
             then openFile (fromJust $ filename cfg) ReadMode
-            else return stdin
+            else openFile ("test.dot") ReadMode
 
   file <- hGetContents handle
   case parseGraph file of
