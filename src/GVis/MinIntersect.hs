@@ -24,13 +24,13 @@ import qualified Debug.Trace as DT
 
 dt x = DT.trace (show x) x
 
--- be type-safe about Pos and Score. 
+-- be type-safe about Pos and Score.
 -- NB: Node still equals Int as a type ( to use IntMap easily )
 --
 newtype Score = Score Int deriving ( Show, Num, Eq, Ord, Enum )
 newtype Pos = Pos Int deriving ( Show, Num, Eq, Ord, Enum )
 
-data Leveling = Leveling { levScore ::  Score, 
+data Leveling = Leveling { levScore ::  Score,
                            levSet :: IntSet,
                            levNodePos :: IntMap (IntMap Pos) }
     deriving ( Show )
@@ -67,11 +67,11 @@ findChainLeveling' g = leveling
 
 findChainLeveling :: Graph gr => gr a b -> [[Node]]
 findChainLeveling = levelingToNodes . findChainLeveling'
-    
+
 insertNode :: Graph gr => IntMap Int -> gr a b -> Node ->  Leveling -> Leveling
-insertNode gLevMap g n l@(Leveling lScore lSet lNodePos) = 
+insertNode gLevMap g n l@(Leveling lScore lSet lNodePos) =
     assert precond $ Leveling newScore newSet newNodePos
-  where 
+  where
     precond = isJust (lab g n) && notMember n lSet
     myLevel = gLevMap ! n
     curNodePos = lNodePos ! myLevel
@@ -84,7 +84,7 @@ insertNode gLevMap g n l@(Leveling lScore lSet lNodePos) =
             posMap = lNodePos ! adjLevel
     scores = on (zipWith (+)) dirScr True False
     bestScore = minimum scores
-    bestPos = Pos $ fromJust $ elemIndex bestScore scores 
+    bestPos = Pos $ fromJust $ elemIndex bestScore scores
     newCurNodePos = IM.insert n bestPos $ IM.map ( ifF ( >= bestPos) succ id ) curNodePos
     newNodePos = IM.insert myLevel newCurNodePos lNodePos
     newScore = lScore + bestScore
@@ -94,7 +94,7 @@ removeChain :: Int -> [Node] -> Leveling -> Leveling
 removeChain firstLevel chain l@(Leveling lScore lSet lPosMap) = Leveling newScore newSet newPosMap
   where
     lastLevel = firstLevel + length chain - 1
-    levels = [firstLevel..lastLevel] 
+    levels = [firstLevel..lastLevel]
 
     (untHead, tmpTail) = span ( ( < firstLevel) . fst ) $ IM.toList lPosMap
     (modMiddle,untTail) = span ( ( <= lastLevel ) . fst ) tmpTail
@@ -114,9 +114,9 @@ removeChain firstLevel chain l@(Leveling lScore lSet lPosMap) = Leveling newScor
 reinsertChain :: Graph gr => IntMap Int ->
                              gr a b ->
                              [Node] ->
-                             Leveling -> 
+                             Leveling ->
                              Leveling
-reinsertChain levMap g chain = -- removeChain firstLevel chain
+reinsertChain levMap g chain =
   insertChain levMap g chain . removeChain firstLevel chain
     where firstLevel = levMap ! (head chain)
 
@@ -142,16 +142,16 @@ insertChain levMap g chain l@(Leveling lScore lSet lPosMap) = Leveling newScore 
     levelsAdjPos dir = map (adjPos dir) levels
     numSiblings = tail $ map (IM.size . (lPosMap !)) levels
 
-    addCosts = zipWith4 insCostsForNode (nodesAdjPos True) (levelsAdjPos True) 
+    addCosts = zipWith4 insCostsForNode (nodesAdjPos True) (levelsAdjPos True)
                                         (nodesAdjPos False) (levelsAdjPos False)
 
-    processLevel ( prevNbrsPos, numSib, addCost, prevSucPos, prevPos ) = 
+    processLevel ( prevNbrsPos, numSib, addCost, prevSucPos, prevPos ) =
         zipWith ( first . (+) ) addCost . insertingCosts' prevNbrsPos numSib prevSucPos prevPos
 
-    
+
     levelDesc = zip5 (levelsAdjPos False) numSiblings (tail addCosts) (nodesAdjPos False) (tail $ nodesAdjPos True)
     initScore = zip (head addCosts) (map (:[]) [0..])
-    finalScore = minimumBy (comparing fst) $ foldl' (flip processLevel) initScore levelDesc 
+    finalScore = minimumBy (comparing fst) $ foldl' (flip processLevel) initScore levelDesc
 
     insNodeToLevel n p = IM.insert n p . IM.map ( ifF ( >= p) succ id )
 
@@ -162,13 +162,13 @@ insertChain levMap g chain l@(Leveling lScore lSet lPosMap) = Leveling newScore 
 
     newScore = lScore + fst finalScore
     newSet = IS.union lSet $ IS.fromList chain
-    
--- Inserting costs for node in the chain based on 
+
+-- Inserting costs for node in the chain based on
 -- prev node inserting costs - count only chain edge intersections
 
 insertingCosts' :: [[Pos]] -> Int -> [Pos] -> [Pos] -> [(Score,[Pos])] -> [(Score,[Pos])]
 insertingCosts' prevLevelNbrsPos numSiblings prevSucPos prevPos prevCosts = zipWith ( second . (:) ) [0..] newCosts
-  where 
+  where
     newCosts = map ( minimumBy ( comparing fst ) . zipWith ( flip (first . (+))) prevCosts ) costMatrix
 
     posToInsert = [0..Pos numSiblings]
@@ -176,9 +176,9 @@ insertingCosts' prevLevelNbrsPos numSiblings prevSucPos prevPos prevCosts = zipW
 
     toLefts = map ( \x -> length ( filter ( < x ) prevPos ) ) [0..]
     toRights = map ( length prevPos - ) toLefts
-    
+
     insCostsForPos p = zipWith (+) addScores $ sumRLCosts (map prevLvlInter prevLevelNbrsPos)
-      where 
+      where
         -- this is unfortunately linear
         -- TODO: can be done in O(1)
         prevLvlInter xs = let ll = length (filter ( < p ) xs) in
@@ -189,7 +189,7 @@ insertingCosts' prevLevelNbrsPos numSiblings prevSucPos prevPos prevCosts = zipW
         addScores = zipWith ( \x y -> Score $ toLeft * x + toRight * y ) toLefts toRights
 
 -- Inserting costs for node into leveling (one adj level).
--- first arg is node's neighbors pos 
+-- first arg is node's neighbors pos
 -- second arg is adjacent level's neighbors pos,
 -- ( in the same direction as the adjacent levels )
 
@@ -211,9 +211,9 @@ rightLeftScore init_xs init_ys = over both Score $ calc' init_xs init_ys 0
     calc' xxs [] _ = (length xxs * len, 0)
     calc' xxs@(x:xs) yys@(y:ys) toLeft
       | x > y = calc' xxs ys (toLeft+1)
-      | x < y = let (lscore', rscore') = calc' xs yys toLeft 
+      | x < y = let (lscore', rscore') = calc' xs yys toLeft
                  in ( lscore'+toLeft, rscore'+len-toLeft)
-      | x == y = let ( lscore', rscore') = calc' xxs' yys' (toLeft+ylen) 
+      | x == y = let ( lscore', rscore') = calc' xxs' yys' (toLeft+ylen)
                   in (lscore'+toLeft * xlen, (rscore'+len-toLeft-ylen) * xlen)
         where (xlen, xxs') = first length $ span ( == x ) xxs
               (ylen, yys') = first length $ span ( == y ) yys
@@ -235,7 +235,7 @@ nodesToLeveling n = Leveling{ levScore = 0, levSet = lSet, levNodePos = lPosMap 
 
 chainDecompose :: Graph gr => gr a b -> [[Node]]
 chainDecompose = chainDecompose' selChain
-  where 
+  where
     selChain g = go $ head $ filter ( (==0) . indeg g ) $ nodes g
       where go n = let s = suc g n in if null s then [n] else n:go (head s)
 
@@ -246,7 +246,7 @@ chainDecompose' selector = decomp
 
 chainDecomposeOpt :: Graph gr => gr a b -> [[Node]]
 chainDecomposeOpt g = decomp $ IS.fromList $ nodes g
-  where 
+  where
     decomp :: IntSet -> [[Node]]
     decomp s | IS.null s = []
              | otherwise = let ns = selectChain g s in ns : decomp (foldr (IS.delete) s ns)
@@ -259,7 +259,7 @@ selectChain g nodeSet = view _4 $ maximum $ map score ns
     score = memoFix score'
     score' :: ( Node -> (Score, Score, Int, [Node]) ) -> Node -> (Score, Score, Int, [Node])
     score' f n =  dpAdjust $ maximum $ (0,0,0,[]):map f (sucFun n)
-      where 
+      where
         --nodeScore = Score $ deg g n
         nodeScore1 = Score $ length $ filter (not . (`IS.member` nodeSet)) nbrs
         nodeScore2 = 0 -- Score $ length nbrs
