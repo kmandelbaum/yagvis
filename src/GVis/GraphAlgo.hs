@@ -42,7 +42,7 @@ unmarkBackEdges = edgeMap (over _3 $ filter ( /= Dir Back))
 markBackEdges :: DynGraph gr => gr a Attributes -> gr a Attributes
 markBackEdges g = edgeMap (ifF isBack markBack id) g
   where
-    forest = trueDff' g
+    forest = dff' g
     allnodes = nodeRange g
 
     etimes = fromList $ concatMap flatten forest `zip` [1..]
@@ -82,15 +82,15 @@ lateTimes g et = arr
     arrayEntry (_, n, _, []) = (n, et ! n)
     arrayEntry c = (n, (subtract 1) $ minimum $ map (arr !) $ filter (n /=) $ suc' c)
       where n = node' c
-
+{-
 trueDff' :: Graph gr => gr a b -> Forest Node
 trueDff' g = dff spawnNodes g
-  where spawnNodes = map rootLabel $ filter isInitial forest
-        isInitial = all noEdgeFromOtherTree . flatten
+  where spawnNodes = filter noEdgeFromOtherTree $ map rootLabel forest
         forest = dff' g
         noEdgeFromOtherTree n = all ( == forestId ! n) $ map (forestId !) $ pre g n
         forestId = fromList $ concat labeledNodes
         labeledNodes = zipWith zip (map flatten forest) $ map repeat [1..]
+-}
 
 toLevels :: Graph gr => gr a b -> IntMap [Node]
 toLevels g = fromListWith mappend (map (over _2 unit . swap) $ assocs $ (earlyTimes g))
@@ -98,7 +98,16 @@ toLevels g = fromListWith mappend (map (over _2 unit . swap) $ assocs $ (earlyTi
 -- make the graph acyclic
 -- dummy implemetation:
 --  looses initial back edge hints (TODO)
+-- removes self-edges
 prepareGraph :: DynGraph gr => gr Attributes Attributes -> gr Attributes Attributes
 prepareGraph g = revertBackEdges $
                  markBackEdges $
+                 removeSelfEdges $
                  unmarkBackEdges g
+removeSelfEdges :: DynGraph gr => gr a b -> gr a b
+removeSelfEdges = gmap removeSelfEdge
+  where
+    removeSelfEdge (i, n, l, o) = (i', n, l, o')
+      where
+        i' = filter ( (/= n) . snd ) i
+        o' = filter ( (/= n) . snd ) o
