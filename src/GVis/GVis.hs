@@ -41,8 +41,14 @@ vcatopts  = ( with & sep .~ 150.0 )
 hcatopts :: RealFloat n => CatOpts n
 hcatopts  = ( with & sep .~ 20.0 )
 
+nodeLW :: Measure Double
+nodeLW = global 1.5
+
+edgeLW :: TypeableFloat n => Measure n
+edgeLW = global 1.5
+
 defaultArrowOpt :: TypeableFloat n => ArrowOpts n
-defaultArrowOpt = with & headLength .~ (local 40) & shaftStyle .~ (lineWidth thin mempty) & arrowTail .~ noTail
+defaultArrowOpt = with & headLength .~ (local 40) & shaftStyle .~ (lineWidth edgeLW mempty) & arrowTail .~ noTail
 
 -- horizontal into vertical cat
 hvcat' ::  ( Monoid a,
@@ -102,11 +108,9 @@ convertGraph g = ( bindCross . bindRegular . removeCrossEdges ) g
     removeCrossEdges = efilter ( not . isCrossLevel )
 
 graphToDia :: (DynGraph gr, TwoDRender c, N c ~ Double) => GVRepGraph gr a Attributes -> TwoDDiagram c
---graphToDia g = connectEdges g $ hvcat' hcatopts vcatopts dLevels
-graphToDia g = connectEdges (revertBackEdgesInGVRep g) $ vcat' vcatopts $ map ( mconcat . map (\n -> translate (r2 (xPoss ! n,0)) (ds ! n) ) ) nLevels
+graphToDia g = connectEdges (revertBackEdgesInGVRep g) $
+  vcat' vcatopts $ map ( mconcat . map (\n -> translate (r2 (xPoss ! n,0)) (ds ! n) ) ) nLevels
   where
-        --dLevels = ( map . map ) (ds !) $ map toList $ toList nLevels
-
         nLevels :: [[Node]]
         nLevels = findChainLeveling g'
         g' = elfilter (null . gvPartNodes) g
@@ -117,8 +121,8 @@ graphToDia g = connectEdges (revertBackEdgesInGVRep g) $ vcat' vcatopts $ map ( 
 
         nodeToDia n = named n $ maybe invisNode (const visNode) d
           where GVRepNode{ gvNodeData = d } = fromJust $ lab g n
-                invisNode = center $ rect 140 40 # lw none
-                visNode = center $ strutX 40 ||| ( ellipseXY 100 60 # lw thin <> text (show n) # fontSize (local 40) ) ||| strutX 40
+                invisNode = center $ rect 100 70 # lw none
+                visNode = center $ strutX 50 ||| ( ellipseXY 100 70 # lw nodeLW <> text (show n) # fontSize (local 50) ) ||| strutX 50
 
 connectEdges :: (Epsilon (N c), TwoDRender c, DynGraph gr) => gr a (GVRepEdge b) -> TwoDDiagram c -> TwoDDiagram c
 connectEdges g = connectLong . connectShort
@@ -134,7 +138,8 @@ straitArrows = flip $ foldr ( uncurry ( connectOutside' defaultArrowOpt ) )
 splineArrows :: (Epsilon (N c), TwoDRender c) => [LEdge (GVRepEdge a)] -> TwoDDiagram c -> TwoDDiagram c
 splineArrows es d = d <> foldMap edgeSubDia es
   where
-    edgeSubDia (from, to, GVRepEdge (Just attrs) partNodes) = arrowBetween' (defaultArrowOpt & arrowShaft .~ shaft) fromEnd toEnd
+    edgeSubDia (from, to, GVRepEdge (Just attrs) partNodes) =
+      arrowBetween' (defaultArrowOpt & arrowShaft .~ shaft) fromEnd toEnd
       where
         fromEnd = fst $ arrowEnd from $ head partNodes
         (toEnd, toEnd') = arrowEnd to $ last partNodes
@@ -149,6 +154,7 @@ splineArrows es d = d <> foldMap edgeSubDia es
                              adjustment = 40 *^ L.normalize d
                          in (end, end .+^ adjustment)
         shaft = cubicSpline False locs
+        --shaft = trailFromVertices locs
 fromJustMsg = flip ( fromMaybe . error )
 
 revertBackEdgesInGVRep :: DynGraph gr =>
