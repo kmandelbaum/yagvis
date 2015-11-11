@@ -18,16 +18,14 @@ import Data.GraphViz.Attributes.Complete (Attribute(Dir), DirType(Back))
 import Data.Graph.Inductive hiding ( (&), Path )
 import Data.IntMap( fromListWith, (!), IntMap )
 import qualified Data.IntMap as IM
-import Data.Tuple( swap )
 import Data.List( partition )
-import Data.Monoid ( mappend )
 import Data.Foldable( foldMap, toList )
 import Data.Sequence( Seq )
 import Data.Semigroup.Reducer( unit )
 import Linear as L
 
 
-import Control.Arrow( (&&&), (***) )
+import Control.Arrow( (&&&) )
 import Control.Lens( _1, _2, _3, view, traverse, over )
 
 import Debug.Trace as DT
@@ -115,13 +113,13 @@ graphToDia g = connectEdges (revertBackEdgesInGVRep g) $
         nLevels = findChainLeveling g'
         g' = elfilter (null . gvPartNodes) g
 
-        ds = IM.fromList $ map ( id &&& nodeToDia ) $ nodes g'
+        ds = IM.fromList $ map (id &&& nodeToDia ) $ nodes g'
 
         xPoss = minimizeEdgeLength g' nLevels ( fmap width ds )
 
         nodeToDia n = named n $ maybe invisNode (const visNode) d
           where GVRepNode{ gvNodeData = d } = fromJust $ lab g n
-                invisNode = center $ rect 100 70 # lw none
+                invisNode = center $ rect 100 70 # lw none -- <> (circle 10 # fc red # lw none)
                 visNode = center $ strutX 50 ||| ( ellipseXY 100 70 # lw nodeLW <> text (show n) # fontSize (local 50) ) ||| strutX 50
 
 connectEdges :: (Epsilon (N c), TwoDRender c, DynGraph gr) => gr a (GVRepEdge b) -> TwoDDiagram c -> TwoDDiagram c
@@ -153,9 +151,30 @@ splineArrows es d = d <> foldMap edgeSubDia es
                              end = fromMaybe l1 (maxTraceP l1 d s1)
                              adjustment = 40 *^ L.normalize d
                          in (end, end .+^ adjustment)
-        shaft = cubicSpline False locs
+
+        --shaft = cubicSpline False (isperse locs)
         --shaft = trailFromVertices locs
+        shaft = fromSegments $ smoothConnect locs
 fromJustMsg = flip ( fromMaybe . error )
+
+isperse [x] = [x]
+isperse [] = []
+isperse (x:y:xs) = x:(x .+^ 0.5 *^ (y .-. x)):isperse (y:xs)
+
+smoothConnect :: (Fractional n, Num n, Additive v) => [Point v n] -> [Segment Closed v n]
+smoothConnect [x, y] = [straight $ y .-. x]
+smoothConnect [x] = []
+smoothConnect (x:y:z:xs) = straight vline:
+                           bezier3 d1 d1 d2:
+                           smoothConnect ((y .+^ d12):z:xs)
+  where
+    vline = (1 - a) *^ (y .-. x)
+    d1 = a *^ (y .-. x)
+    d2 = a *^ (z .-. x)
+    d12 = a *^ (z .-. y)
+    a = 0.2
+
+
 
 revertBackEdgesInGVRep :: DynGraph gr =>
   GVRepGraph gr a Attributes ->
